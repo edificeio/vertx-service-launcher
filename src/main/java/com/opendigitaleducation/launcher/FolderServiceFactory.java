@@ -1,6 +1,8 @@
 package com.opendigitaleducation.launcher;
 
 import io.vertx.core.*;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.service.ServiceVerticleFactory;
 
 import java.io.File;
@@ -23,6 +25,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
 
     protected static final String SERVICES_PATH = "vertx.services.path";
     protected static final String FACTORY_PREFIX = "folderService";
+    private static final Logger log = LoggerFactory.getLogger(FolderServiceFactory.class);
 
     private Vertx vertx;
     private String servicesPath;
@@ -44,7 +47,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                 jarsInPath.putIfAbsent(jarName.replaceFirst("-fat.jar", ""), jarPath);
             }
         } catch (RuntimeException e) {
-            // TODO add log
+            log.error("Error listing jars in services path.", e);
         }
     }
 
@@ -69,12 +72,13 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
             } else {
                 final String jar = jarsInPath.get(identifier);
                 if (jar != null) {
-                    try {
-                        unzipJar(jar, servicePath);
-                        deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
-                    } catch (IOException e) {
-                        resolution.fail(e);
-                    }
+                    unzipJar(jar, servicePath, res -> {
+                        if (res.succeeded()) {
+                            deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
+                        } else {
+                            resolution.fail(res.cause());
+                        }
+                    });
                 } else {
                     resolution.fail("Service not found : " + identifier);
                 }
@@ -118,26 +122,51 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
 		});
     }
 
-    // TODO replace by non-blocking method
-    private void unzipJar(String jarFile, String destDir) throws IOException {
-        JarFile jar = new JarFile(jarFile);
-        Enumeration enumEntries = jar.entries();
-        while (enumEntries.hasMoreElements()) {
-            JarEntry file = (JarEntry) enumEntries.nextElement();
-            File f = new File(destDir + File.separator + file.getName());
-            if (file.isDirectory()) { // if its a directory, create it
-                f.mkdirs();
-                continue;
+    private void unzipJar(String jarFile, String destDir, Handler<AsyncResult<Void>> handler) {
+        vertx.executeBlocking(future -> {
+            JarFile jar = null;
+            try {
+                jar = new JarFile(jarFile);
+                Enumeration enumEntries = jar.entries();
+                while (enumEntries.hasMoreElements()) {
+                    JarEntry file = (JarEntry) enumEntries.nextElement();
+                    File f = new File(destDir + File.separator + file.getName());
+                    if (file.isDirectory()) {
+                        f.mkdirs();
+                        continue;
+                    }
+                    InputStream is = null;
+                    FileOutputStream fos = null;
+                    try {
+                        is = jar.getInputStream(file);
+                        fos = new FileOutputStream(f);
+                        while (is.available() > 0) {
+                            fos.write(is.read());
+                        }
+                    } catch (IOException e) {
+                        future.fail(e);
+                    } finally {
+                        if (fos != null) {
+                            fos.close();
+                        }
+                        if (is != null) {
+                            is.close();
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                future.fail(e);
+            } finally {
+                if (jar != null) {
+                    try {
+                        jar.close();
+                    } catch (IOException e) {
+                        log.error("Error closing jar file.", e);
+                    }
+                }
             }
-            InputStream is = jar.getInputStream(file); // get the input stream
-            FileOutputStream fos = new FileOutputStream(f);
-            while (is.available() > 0) {  // write contents of 'is' to 'fos'
-                fos.write(is.read());
-            }
-            fos.close();
-            is.close();
-        }
-        jar.close();
+            future.complete();
+        }, handler);
     }
 
     @Override
