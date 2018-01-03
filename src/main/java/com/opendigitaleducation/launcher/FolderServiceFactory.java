@@ -136,6 +136,9 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                         f.mkdirs();
                         continue;
                     }
+                    if (!f.getParentFile().exists()) {
+                        f.getParentFile().mkdirs();
+                    }
                     InputStream is = null;
                     FileOutputStream fos = null;
                     try {
