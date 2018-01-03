@@ -7,6 +7,8 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
+import java.io.File;
+
 import static com.opendigitaleducation.launcher.FolderServiceFactory.FACTORY_PREFIX;
 
 public class VertxServiceLauncher extends AbstractVerticle {
@@ -35,15 +37,29 @@ public class VertxServiceLauncher extends AbstractVerticle {
         if (name == null || name.isEmpty()) {
 			deployServices(services, index + 1);
 		}
+        JsonObject config = service.getJsonObject("config");
+        if (config == null) {
+            config = new JsonObject();
+        }
+        config.put("cwd", System.getProperty("vertx.services.path") + File.separator + name);
         final DeploymentOptions deploymentOptions = new DeploymentOptions()
-            .setConfig(service.getJsonObject("config"))
+            .setConfig(config)
             .setWorker(service.getBoolean("worker", false))
             .setMultiThreaded(service.getBoolean("multi-threaded", false));
         if (service.getBoolean("waitDeploy", false)) {
-            vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions,
-                ar -> deployServices(services, index + 1));
+            vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
+                if (ar.succeeded()) {
+                    deployServices(services, index + 1);
+                } else {
+                    log.error("Error deploying required service  : " + name, ar.cause());
+                }
+            });
         } else {
-            vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions);
+            vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
+                if (ar.failed()) {
+                    log.error("Error deploying required service  : " + name, ar.cause());
+                }
+            });
             deployServices(services, index + 1);
         }
     }
