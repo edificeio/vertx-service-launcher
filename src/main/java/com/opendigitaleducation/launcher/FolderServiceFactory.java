@@ -124,6 +124,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
 
     private void unzipJar(String jarFile, String destDir, Handler<AsyncResult<Void>> handler) {
         vertx.executeBlocking(future -> {
+            long start = System.currentTimeMillis();
             JarFile jar = null;
             try {
                 jar = new JarFile(jarFile);
@@ -140,8 +141,10 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                     try {
                         is = jar.getInputStream(file);
                         fos = new FileOutputStream(f);
-                        while (is.available() > 0) {
-                            fos.write(is.read());
+                        byte[] buffer = new byte[8192];
+                        int bytesRead;
+                        while ((bytesRead = is.read(buffer)) != -1) {
+                            fos.write(buffer, 0, bytesRead);
                         }
                     } catch (IOException e) {
                         future.fail(e);
@@ -165,7 +168,10 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                     }
                 }
             }
-            future.complete();
+            log.info(jarFile + " - uncompress duration : " + (System.currentTimeMillis() - start));
+            if (!future.isComplete()) {
+                future.complete();
+            }
         }, handler);
     }
 
