@@ -42,6 +42,9 @@ public class VertxServiceLauncher extends AbstractVerticle {
             config = new JsonObject();
         }
         config.put("cwd", System.getProperty("vertx.services.path") + File.separator + name);
+        if (!config.containsKey("assets-path") && config().getString("assets-path") != null) {
+            config.put("assets-path", config().getString("assets-path"));
+        }
         final DeploymentOptions deploymentOptions = new DeploymentOptions()
             .setConfig(config)
             .setWorker(service.getBoolean("worker", false))
