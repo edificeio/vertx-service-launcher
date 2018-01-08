@@ -10,9 +10,15 @@ public abstract class AbstactServiceResolver implements ServiceResolver {
     protected String servicesPath;
     protected static final Logger log = LoggerFactory.getLogger(ServiceResolver.class);
 
+    @Override
     public void init(Vertx vertx, String servicesPath) {
         this.vertx = vertx;
         this.servicesPath = servicesPath;
+    }
+
+    @Override
+    public void close() {
+
     }
 
 }

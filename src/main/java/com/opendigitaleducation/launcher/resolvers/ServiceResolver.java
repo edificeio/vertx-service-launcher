@@ -10,4 +10,6 @@ public interface ServiceResolver {
 
     void resolve(String identifier, Handler<AsyncResult<String>> handler);
 
+    void close();
+
 }

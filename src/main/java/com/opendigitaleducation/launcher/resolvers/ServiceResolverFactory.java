@@ -41,4 +41,12 @@ public class ServiceResolverFactory {
         });
     }
 
+    public void close() {
+        if (serviceResolvers != null) {
+            for (ServiceResolver serviceResolver : serviceResolvers) {
+                serviceResolver.close();
+            }
+        }
+    }
+
 }

@@ -109,6 +109,13 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
 		});
     }
 
+    @Override
+    public void close() {
+        if (serviceResolver != null) {
+            serviceResolver.close();
+        }
+    }
+
     private void unzipJar(String jarFile, String destDir, Handler<AsyncResult<Void>> handler) {
         vertx.executeBlocking(future -> {
             long start = System.currentTimeMillis();

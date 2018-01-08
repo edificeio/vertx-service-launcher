@@ -1,2 +1,3 @@
 com.opendigitaleducation.launcher.resolvers.JarServiceResolver
 com.opendigitaleducation.launcher.resolvers.MavenLocalServiceResolver
+com.opendigitaleducation.launcher.resolvers.MavenServiceResolver
