@@ -1,5 +1,6 @@
 package com.opendigitaleducation.launcher;
 
+import com.opendigitaleducation.launcher.resolvers.ServiceResolverFactory;
 import io.vertx.core.*;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -14,10 +15,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.List;
 import java.util.Scanner;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -29,26 +27,14 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
 
     private Vertx vertx;
     private String servicesPath;
-    private ConcurrentMap<String, String> jarsInPath = new ConcurrentHashMap<>();
+    private ServiceResolverFactory serviceResolver;
 
     @Override
     public void init(Vertx vertx) {
         this.vertx = vertx;
         this.servicesPath = System.getProperty(SERVICES_PATH);
-        try {
-            List<String> jars = this.vertx.fileSystem().readDirBlocking(servicesPath, ".*-fat.jar");
-            for (String jarPath : jars) {
-                final String jarName;
-                if (jarPath.contains(File.separator)) {
-                    jarName = jarPath.substring(jarPath.lastIndexOf(File.separatorChar) + 1);
-                } else {
-                    jarName = jarPath;
-                }
-                jarsInPath.putIfAbsent(jarName.replaceFirst("-fat.jar", ""), jarPath);
-            }
-        } catch (RuntimeException e) {
-            log.error("Error listing jars in services path.", e);
-        }
+        this.serviceResolver = new ServiceResolverFactory();
+        this.serviceResolver.init(vertx, servicesPath);
     }
 
     @Override
@@ -70,18 +56,19 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
             if (ar.succeeded() && ar.result()) {
                 deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
             } else {
-                final String jar = jarsInPath.get(identifier);
-                if (jar != null) {
-                    unzipJar(jar, servicePath, res -> {
-                        if (res.succeeded()) {
-                            deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
-                        } else {
-                            resolution.fail(res.cause());
-                        }
-                    });
-                } else {
-                    resolution.fail("Service not found : " + identifier);
-                }
+                serviceResolver.resolve(identifier, jar -> {
+                    if (jar.succeeded()) {
+                        unzipJar(jar.result(), servicePath, res -> {
+                            if (res.succeeded()) {
+                                deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
+                            } else {
+                                resolution.fail(res.cause());
+                            }
+                        });
+                    } else {
+                        resolution.fail("Service not found : " + identifier);
+                    }
+                });
             }
 		});
     }
