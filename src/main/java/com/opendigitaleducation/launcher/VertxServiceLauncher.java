@@ -6,6 +6,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
+import io.vertx.core.shareddata.LocalMap;
 
 import java.io.File;
 
@@ -15,6 +16,11 @@ public class VertxServiceLauncher extends AbstractVerticle {
 
     private static final Logger log = LoggerFactory.getLogger(VertxServiceLauncher.class);
 
+    private String node;
+    private boolean cluster;
+    private LocalMap<String, String> versionMap;
+    private LocalMap<String, String> deploymentsIdMap;
+
     @Override
     public void start() throws Exception {
         JsonArray services = config().getJsonArray("services");
@@ -22,6 +28,14 @@ public class VertxServiceLauncher extends AbstractVerticle {
             log.error("Missing services to deploy.");
             return;
         }
+
+        final LocalMap<Object, Object> serverMap = vertx.sharedData().getLocalMap("server");
+        cluster = config().getBoolean("cluster", false);
+        serverMap.put("cluster", cluster);
+        node = config().getString("node", "");
+        serverMap.put("node", node);
+        deploymentsIdMap = vertx.sharedData().getLocalMap("deploymentsId");
+        versionMap = vertx.sharedData().getLocalMap("versions");
 
         deployServices(services);
     }
@@ -45,6 +59,10 @@ public class VertxServiceLauncher extends AbstractVerticle {
         if (!config.containsKey("assets-path") && config().getString("assets-path") != null) {
             config.put("assets-path", config().getString("assets-path"));
         }
+        final String address = config.getString("address");
+        if (cluster && !node.isEmpty() && address != null) {
+            config.put("address", node + address);
+        }
         final DeploymentOptions deploymentOptions = new DeploymentOptions()
             .setConfig(config)
             .setWorker(service.getBoolean("worker", false))
@@ -53,6 +71,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
             vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
                 if (ar.succeeded()) {
                     deployServices(services, index + 1);
+                    addAppVersion(name, ar.result());
                 } else {
                     log.error("Error deploying required service  : " + name, ar.cause());
                 }
@@ -61,9 +80,19 @@ public class VertxServiceLauncher extends AbstractVerticle {
             vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
                 if (ar.failed()) {
                     log.error("Error deploying required service  : " + name, ar.cause());
+                } else {
+                    addAppVersion(name, ar.result());
                 }
             });
             deployServices(services, index + 1);
+        }
+    }
+
+    private void addAppVersion(final String moduleName, final String deploymentId) {
+        final String[] lNameVersion = moduleName.split("~");
+        if (lNameVersion.length == 3) {
+            versionMap.put(lNameVersion[0] + "." + lNameVersion[1], lNameVersion[2]);
+            deploymentsIdMap.put(lNameVersion[0] + "." + lNameVersion[1], deploymentId);
         }
     }
 
