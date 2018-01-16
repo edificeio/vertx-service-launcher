@@ -1,6 +1,7 @@
 package com.opendigitaleducation.launcher;
 
 import com.opendigitaleducation.launcher.resolvers.ServiceResolverFactory;
+import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.*;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -32,7 +33,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
     @Override
     public void init(Vertx vertx) {
         this.vertx = vertx;
-        this.servicesPath = System.getProperty(SERVICES_PATH);
+        this.servicesPath = FileUtils.absolutePath(System.getProperty(SERVICES_PATH));
         this.serviceResolver = new ServiceResolverFactory();
         this.serviceResolver.init(vertx, servicesPath);
     }

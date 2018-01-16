@@ -1,5 +1,6 @@
 package com.opendigitaleducation.launcher;
 
+import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.json.JsonArray;
@@ -55,7 +56,8 @@ public class VertxServiceLauncher extends AbstractVerticle {
         if (config == null) {
             config = new JsonObject();
         }
-        config.put("cwd", System.getProperty("vertx.services.path") + File.separator + name);
+        config.put("cwd", FileUtils.absolutePath(System.getProperty("vertx.services.path")) +
+            File.separator + name);
         if (!config.containsKey("assets-path") && config().getString("assets-path") != null) {
             config.put("assets-path", config().getString("assets-path"));
         }
