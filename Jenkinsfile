@@ -10,7 +10,7 @@ pipeline {
       steps {
         sh 'mvn deploy'
         sh '''
-          export jarFile=`ls targer/vertx-service-launcher-*-fat.jar`
+          export jarFile=`ls target/vertx-service-launcher-*-fat.jar`
           export jarVersion=`echo $jarFile | sed 's|target/vertx-service-launcher-||' | sed 's/-fat.jar//'`
         case "$jarVersion" in
           *SNAPSHOT) export nexusRepository='snapshots' ;;
