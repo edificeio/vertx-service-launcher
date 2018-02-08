@@ -7,15 +7,21 @@ pipeline {
   }
   stages {
     stage('Build') {
-      sh 'mvn clean install'
+      steps {
+        sh 'mvn clean install'
+      }
     }
     stage('Docker Build') {
-      sh 'docker build -t opendigitaleducation/vertx-service-launcher:latest .'
+      steps {
+        sh 'docker build -t opendigitaleducation/vertx-service-launcher:latest .'
+      }
     }
     stage('Docker Push') {
-      withCredentials([usernamePassword(credentialsId: 'dockerHub', passwordVariable: 'dockerHubPassword', usernameVariable: 'dockerHubUser')]) {
-        sh "docker login -u ${env.dockerHubUser} -p ${env.dockerHubPassword}"
-        sh 'docker push opendigitaleducation/vertx-service-launcher:latest'
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerHub', passwordVariable: 'dockerHubPassword', usernameVariable: 'dockerHubUser')]) {
+          sh "docker login -u ${env.dockerHubUser} -p ${env.dockerHubPassword}"
+          sh 'docker push opendigitaleducation/vertx-service-launcher:latest'
+        }
       }
     }
   }
