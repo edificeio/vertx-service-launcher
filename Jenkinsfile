@@ -1,27 +1,23 @@
 pipeline {
-  agent {
-    docker {
-      image 'maven:3-alpine'
-        args '-v $HOME/.m2:/root/.m2'
-    }
-  }
+  agent any
   stages {
     stage('Build') {
       steps {
-        sh 'mvn clean install'
+        sh 'mvn clean package'
       }
     }
-    stage('Docker Build') {
+    stage('Publish') {
       steps {
-        sh 'docker build -t opendigitaleducation/vertx-service-launcher:latest .'
-      }
-    }
-    stage('Docker Push') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerHub', passwordVariable: 'dockerHubPassword', usernameVariable: 'dockerHubUser')]) {
-          sh "docker login -u ${env.dockerHubUser} -p ${env.dockerHubPassword}"
-          sh 'docker push opendigitaleducation/vertx-service-launcher:latest'
-        }
+        sh 'mvn deploy'
+        sh '''
+          export jarFile=`ls targer/vertx-service-launcher-*-fat.jar`
+          export jarVersion=`echo $jarFile | sed 's|target/vertx-service-launcher-||' | sed 's/-fat.jar//'`
+        case "$jarVersion" in
+          *SNAPSHOT) export nexusRepository='snapshots' ;;
+          *)         export nexusRepository='releases' ;;
+          esac
+            mvn deploy:deploy-file -DgroupId=com.opendigitaleducation -DartifactId=vertx-service-launcher -Dversion=$jarVersion -Dpackaging=jar -Dclassifier=fat -Dfile=$jarFile -DrepositoryId=ode-$nexusRepository -Durl=http://maven.web-education.net/nexus/content/repositories/$nexusRepository/
+        '''
       }
     }
   }
