@@ -7,6 +7,7 @@ import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientOptions;
+import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.w3c.dom.Document;
@@ -40,12 +41,20 @@ public class MavenServiceResolver extends AbstactServiceResolver {
     @Override
     public void init(Vertx vertx, String servicesPath) {
         super.init(vertx, servicesPath);
-        JsonObject repositories = vertx.getOrCreateContext().config().getJsonObject("maven-repositories");
+        JsonObject repositories = null;
+        try {
+            String r = System.getenv("MAVEN_REPOSITORIES");
+            if (r != null) {
+                repositories = new JsonObject(r);
+            }
+        } catch (Exception e) {
+            log.error("Invalid env variable MAVEN_REPOSITORIES.", e);
+        }
         if (repositories == null) {
             repositories = JsonUtil.loadFromResource("maven-repositories.json");
-            releasesRepositories = repositories.getJsonArray("releases", new JsonArray());
-            snapshotsRepositories = repositories.getJsonArray("snapshots", new JsonArray());
         }
+        releasesRepositories = repositories.getJsonArray("releases", new JsonArray());
+        snapshotsRepositories = repositories.getJsonArray("snapshots", new JsonArray());
         releasesClients = new ArrayList<>();
         snapshotsClients = new ArrayList<>();
     }
@@ -73,7 +82,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             handleAsyncError(new NotFoundServiceException(), handler);
             return;
         }
-        final String repository = repositories.getString(index);
+        final String repository = repositories.getJsonObject(index).getString("uri");
         HttpClient client;
         if (index >= clients.size()) {
             try {
@@ -87,11 +96,12 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             client = clients.get(index);
         }
         final String uri = repository + path;
-        downloadFile(index, identifier, path, repositories, clients, handler, client, uri);
+        downloadFile(index, identifier, path, repositories, clients, handler, client, uri,
+            repositories.getJsonObject(index).getString("credential"));
     }
 
-    private void downloadFile(int index, String identifier, String path, JsonArray repositories, List<HttpClient> clients, Handler<AsyncResult<String>> handler, HttpClient client, String uri) {
-        client.getNow(uri, resp -> {
+    private void downloadFile(int index, String identifier, String path, JsonArray repositories, List<HttpClient> clients, Handler<AsyncResult<String>> handler, HttpClient client, String uri, String credential) {
+        HttpClientRequest req = client.get(uri, resp -> {
             if (resp.statusCode() == 200) {
                 resp.bodyHandler(buffer -> {
                     if (uri.endsWith(MAVEN_METADATA_XML)) {
@@ -99,7 +109,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
                             final String snapshotUri = getSnapshotPath(buffer.toString(),
                                 uri.replaceFirst(MAVEN_METADATA_XML, ""), identifier);
                             downloadFile(index, identifier, path, repositories, clients, handler,
-                                client, snapshotUri);
+                                client, snapshotUri, credential);
                         } catch (Exception e) {
                             log.error("Error reading snapshot metadata", e);
                             handleAsyncError(e, handler);
@@ -118,7 +128,11 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             } else {
                 downloadService(index + 1, identifier, path, repositories, clients, handler);
             }
-		});
+        });
+        if (credential != null) {
+            req.putHeader("Authorization", "Basic " + credential);
+        }
+        req.end();
     }
 
     private HttpClient createClient(String repository, List<HttpClient> clients) throws URISyntaxException {
