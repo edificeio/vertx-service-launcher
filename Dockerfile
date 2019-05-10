@@ -5,6 +5,7 @@ ARG JAR_FILE
 
 COPY target/${JAR_FILE} /opt/
 RUN ln -s /opt/${JAR_FILE} /opt/vertx-service-launcher.jar && groupadd vertx && useradd -u 1000 -g 1000 -m vertx && mkdir /srv/springboard && mkdir /srv/storage && chown -R vertx:vertx /srv
+RUN apt-get update && apt-get install -y apt-utils && apt-get install -y ffmpeg
 
 USER vertx
 
