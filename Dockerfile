@@ -11,5 +11,5 @@ USER vertx
 WORKDIR /srv/springboard
 EXPOSE 8090
 
-CMD java -agentlib:jdwp=transport=dt_socket,address=5000,server=y,suspend=n -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf /srv/springboard/conf/vertx.conf
+CMD java -agentlib:jdwp=transport=dt_socket,address=5000,server=y,suspend=n -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -Dconf=/srv/springboard/conf/vertx.conf -jar /opt/vertx-service-launcher.jar
 
