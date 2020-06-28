@@ -4,6 +4,7 @@ LABEL maintainer="Damien BOISSIN <damien.boissin@opendigitaleducation.com>"
 ARG JAR_FILE
 
 COPY target/${JAR_FILE} /opt/
+RUN wget -O /usr/local/openjdk-8/lib/ext/bcprov-jdk15on-160.jar https://www.bouncycastle.org/download/bcprov-jdk15on-160.jar && echo "security.provider.10=org.bouncycastle.jce.provider.BouncyCastleProvider" >> /usr/local/openjdk-8/lib/security/java.security
 RUN ln -s /opt/${JAR_FILE} /opt/vertx-service-launcher.jar && groupadd vertx && useradd -u 1000 -g 1000 -m vertx && mkdir /srv/springboard && mkdir /srv/storage && chown -R vertx:vertx /srv
 
 USER vertx
