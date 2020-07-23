@@ -2,29 +2,22 @@ package com.opendigitaleducation.launcher;
 
 import com.opendigitaleducation.launcher.resolvers.ServiceResolverFactory;
 import com.opendigitaleducation.launcher.utils.FileUtils;
+import com.opendigitaleducation.launcher.utils.ZipUtils;
+
 import io.vertx.core.*;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 import io.vertx.service.ServiceVerticleFactory;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.Scanner;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 
 public class FolderServiceFactory extends ServiceVerticleFactory {
 
     protected static final String SERVICES_PATH = "vertx.services.path";
-    protected static final String FACTORY_PREFIX = "folderService";
-    private static final Logger log = LoggerFactory.getLogger(FolderServiceFactory.class);
+    public static final String FACTORY_PREFIX = "folderService";
 
     private Vertx vertx;
     private String servicesPath;
@@ -59,7 +52,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
             } else {
                 serviceResolver.resolve(identifier, jar -> {
                     if (jar.succeeded()) {
-                        unzipJar(jar.result(), servicePath, res -> {
+                        ZipUtils.unzipJar(vertx, jar.result(), servicePath, res -> {
                             if (res.succeeded()) {
                                 deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
                             } else {
@@ -115,62 +108,6 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
         if (serviceResolver != null) {
             serviceResolver.close();
         }
-    }
-
-    private void unzipJar(String jarFile, String destDir, Handler<AsyncResult<Void>> handler) {
-        vertx.executeBlocking(future -> {
-            long start = System.currentTimeMillis();
-            JarFile jar = null;
-            try {
-                jar = new JarFile(jarFile);
-                Enumeration enumEntries = jar.entries();
-                while (enumEntries.hasMoreElements()) {
-                    JarEntry file = (JarEntry) enumEntries.nextElement();
-                    File f = new File(destDir + File.separator + file.getName());
-                    if (file.isDirectory()) {
-                        f.mkdirs();
-                        continue;
-                    }
-                    if (!f.getParentFile().exists()) {
-                        f.getParentFile().mkdirs();
-                    }
-                    InputStream is = null;
-                    FileOutputStream fos = null;
-                    try {
-                        is = jar.getInputStream(file);
-                        fos = new FileOutputStream(f);
-                        byte[] buffer = new byte[8192];
-                        int bytesRead;
-                        while ((bytesRead = is.read(buffer)) != -1) {
-                            fos.write(buffer, 0, bytesRead);
-                        }
-                    } catch (IOException e) {
-                        future.fail(e);
-                    } finally {
-                        if (fos != null) {
-                            fos.close();
-                        }
-                        if (is != null) {
-                            is.close();
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                future.fail(e);
-            } finally {
-                if (jar != null) {
-                    try {
-                        jar.close();
-                    } catch (IOException e) {
-                        log.error("Error closing jar file.", e);
-                    }
-                }
-            }
-            log.info(jarFile + " - uncompress duration : " + (System.currentTimeMillis() - start));
-            if (!future.isComplete()) {
-                future.complete();
-            }
-        }, handler);
     }
 
     @Override

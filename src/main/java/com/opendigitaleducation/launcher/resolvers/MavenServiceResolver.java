@@ -37,7 +37,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
     private JsonArray snapshotsRepositories;
     private List<HttpClient> releasesClients;
     private List<HttpClient> snapshotsClients;
-
+    private boolean shouldInitExtraRepo = true;
     @Override
     public void init(Vertx vertx, String servicesPath) {
         super.init(vertx, servicesPath);
@@ -55,12 +55,23 @@ public class MavenServiceResolver extends AbstactServiceResolver {
         }
         releasesRepositories = repositories.getJsonArray("releases", new JsonArray());
         snapshotsRepositories = repositories.getJsonArray("snapshots", new JsonArray());
+        //
         releasesClients = new ArrayList<>();
         snapshotsClients = new ArrayList<>();
     }
 
     @Override
     public void resolve(String identifier, Handler<AsyncResult<String>> handler) {
+        if(shouldInitExtraRepo){
+            //extra repo
+            final JsonObject config =  vertx.getOrCreateContext().config();
+            if(config.containsKey("extraMavenRepositories")){
+                final JsonObject extra = config.getJsonObject("extraMavenRepositories");
+                releasesRepositories.addAll(extra.getJsonArray("releases", new JsonArray()));
+                snapshotsRepositories.addAll(extra.getJsonArray("snapshots", new JsonArray()));
+            }
+            shouldInitExtraRepo=false;
+        }
         final String [] id = identifier.split("~");
         if (id.length != 3) {
             handleAsyncError(new NotFoundServiceException("invalid.identifier"), handler);
@@ -71,7 +82,8 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             path += MAVEN_METADATA_XML;
             downloadService(0, identifier, path, snapshotsRepositories, snapshotsClients, handler);
         } else {
-            path += id[1] + "-" + id[2] + "-fat.jar";
+            final String ext = ExtensionRegistry.getExtensionForId(identifier);
+            path += id[1] + "-" + id[2] + ext;
             downloadService(0, identifier, path, releasesRepositories, releasesClients, handler);
         }
     }
@@ -115,7 +127,8 @@ public class MavenServiceResolver extends AbstactServiceResolver {
                             handleAsyncError(e, handler);
                         }
                     } else {
-                        final String destFile = servicesPath + File.separator + identifier + "-fat.jar";
+                        final String ext = ExtensionRegistry.getExtensionForId(identifier);
+                        final String destFile = servicesPath + File.separator + identifier + ext;
                         vertx.fileSystem().writeFile(destFile, buffer, ar -> {
                             if (ar.succeeded()) {
                                 DefaultAsyncResult.handleAsyncResult(destFile, handler);
@@ -173,7 +186,8 @@ public class MavenServiceResolver extends AbstactServiceResolver {
         String timestamp = xpath.evaluate("//timestamp", root);
         String buildNumber = xpath.evaluate("//buildNumber", root);
         final String [] id = identifier.split("~");
-        return uri + id[1] + "-" + id[2].replaceFirst("-SNAPSHOT", "") + "-" + timestamp + "-" + buildNumber + "-fat.jar" ;
+        final String ext = ExtensionRegistry.getExtensionForId(identifier);
+        return uri + id[1] + "-" + id[2].replaceFirst("-SNAPSHOT", "") + "-" + timestamp + "-" + buildNumber + ext ;
     }
 
 }

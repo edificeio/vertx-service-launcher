@@ -11,4 +11,12 @@ public class FileUtils {
         return path;
     }
 
+    public static String pathWithExtension(String path, String ext) {
+        if (path.endsWith("/")) {
+            return path.substring(0, path.length() - 1) + ext;
+        } else {
+            return path + ext;
+        }
+    }
+
 }
