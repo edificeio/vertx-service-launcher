@@ -12,7 +12,7 @@ public interface ModuleDeployer {
 
     static ModuleDeployer create(final Vertx vertx, final JsonObject config) {
         final ModuleDeployer def = new ModuleDeployerDefault(vertx, config);
-        return new ModuleDeployerRetry(config, def);
+        return new ModuleDeployerRetry(config, def, vertx);
     }
 
     Future<Void> deploy(JsonObject services);
@@ -24,7 +24,7 @@ public interface ModuleDeployer {
     default Future<Void> restartAll(List<JsonObject> services) {
         Future<Void> currentFuture = Future.succeededFuture();
         for (final JsonObject service : services) {
-            //wait restart to avoid duplicate mods
+            // wait restart to avoid duplicate mods
             currentFuture = currentFuture.compose(res -> {
                 return restart(service);
             });
@@ -35,7 +35,7 @@ public interface ModuleDeployer {
     default Future<Void> undeployAll(List<JsonObject> services) {
         Future<Void> currentFuture = Future.succeededFuture();
         for (final JsonObject service : services) {
-            //wait undeploy to avoid duplicate mods
+            // wait undeploy to avoid duplicate mods
             currentFuture = currentFuture.compose(res -> {
                 return undeploy(service);
             });
@@ -59,7 +59,7 @@ public interface ModuleDeployer {
             }
         }
         futures.add(currentFuture);
-        return CompositeFuture.all(futures).map(e->null);
+        return CompositeFuture.all(futures).map(e -> null);
     }
 
     static String getServiceIdQuietly(JsonObject service) {

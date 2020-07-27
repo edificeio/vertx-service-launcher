@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
+import io.vertx.core.CompositeFuture;
+import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
@@ -22,12 +24,14 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 public class ConfigProviderConsul implements ConfigProvider {
+
     static String CONSUL_MODS_CONFIG = "consulMods";
+    private static int countDeploy = 0;
     private static final Logger log = LoggerFactory.getLogger(ConfigProviderConsul.class);
     private Vertx vertx;
     private int pullEveryMs;
     private long periodic;
-    private String urlMods;
+    private List<String> urlMods = new ArrayList<>();
     private String urlSync;
     private HttpClient client;
     private String nodeName;
@@ -55,10 +59,29 @@ public class ConfigProviderConsul implements ConfigProvider {
     }
 
     private void reload() {
-        client.getAbs(urlMods + "?recurse", res -> {
-            res.bodyHandler(body -> {
-                final JsonArray services = new JsonArray(body);
-                final ConfigChangeEventConsul event = new ConfigChangeEventConsul(originalConfig, services, lastEvent);
+        final List<Future> futures = new ArrayList<>();
+        for (final String url : urlMods) {
+            final Future<JsonArray> future = Future.future();
+            futures.add(future);
+            client.getAbs(url + "?recurse", res -> {
+                res.bodyHandler(body -> {
+                    final JsonArray services = new JsonArray(body);
+                    future.complete(services);
+                });
+                res.exceptionHandler(exc -> {
+                    log.error("Failed to load consul config (body) : " + url, exc);
+                    future.fail(exc);
+                });
+            }).exceptionHandler(exc -> {
+                log.error("Failed to load consul config (connection) : " + url, exc);
+                future.fail(exc);
+            }).end();
+        }
+        CompositeFuture.all(futures).setHandler(res -> {
+            if (res.succeeded()) {
+                countDeploy++;
+                final ConfigChangeEventConsul event = new ConfigChangeEventConsul(originalConfig, res.result().list(),
+                        lastEvent);
                 pushEvent(event.onEnd(onFinish -> {
                     initTimer();
                     if (onFinish) {
@@ -82,15 +105,10 @@ public class ConfigProviderConsul implements ConfigProvider {
                 }).onEmpty(resEmpty -> {
                     initTimer();
                 }));
-            });
-            res.exceptionHandler(exc -> {
-                log.error("Failed to load consul config (body) : " + urlMods, exc);
+            } else {
                 initTimer();
-            });
-        }).exceptionHandler(exc -> {
-            log.error("Failed to load consul config (connection) : " + urlMods, exc);
-            initTimer();
-        }).end();
+            }
+        });
     }
 
     private void initTimer() {
@@ -99,17 +117,40 @@ public class ConfigProviderConsul implements ConfigProvider {
         });
     }
 
+    private String cleanModUrl(String url) {
+        if (!url.endsWith("/")) {
+            url += "/";
+        }
+        return url;
+    }
+
+    private boolean initModsUrls(Object urlMods) {
+        if (urlMods == null) {
+            return false;
+        } else if (urlMods instanceof String) {
+            final String url = cleanModUrl((String) urlMods);
+            this.urlMods.add(url);
+            return url.trim().length() > 1;
+        } else if (urlMods instanceof JsonArray) {
+            for (final Object val : ((JsonArray) urlMods)) {
+                if (val instanceof String) {
+                    this.urlMods.add(cleanModUrl((String) val));
+                }
+            }
+            return this.urlMods.size() > 0;
+        } else {
+            return false;
+        }
+    }
+
     @Override
     public ConfigProvider start(Vertx vertx, JsonObject config) {
         this.vertx = vertx;
         originalConfig = config;
         pullEveryMs = config.getInteger("pullEverySeconds", 1) * 1000;
         // url mods
-        urlMods = config.getString(CONSUL_MODS_CONFIG);
-        if (!urlMods.endsWith("/")) {
-            urlMods += "/";
-        }
-        if (urlMods == null || urlMods.trim().isEmpty()) {
+        Object urlMods = config.getValue(CONSUL_MODS_CONFIG);
+        if (!initModsUrls(urlMods)) {
             log.error("Invalid consul mods url: " + urlMods);
             return this;
         }
@@ -149,17 +190,34 @@ public class ConfigProviderConsul implements ConfigProvider {
             originalConfig = new JsonObject();
         }
 
-        ConfigChangeEventConsul(JsonObject originalConfig, JsonArray services, ConfigChangeEventConsul previous) {
+        ConfigChangeEventConsul(JsonObject originalConfig, List<JsonArray> services, ConfigChangeEventConsul previous) {
             this.originalConfig = new JsonObject(originalConfig.getMap());
-            final List<JsonObject> servicesList = services.stream().map(e -> (JsonObject) e).sorted((a, b) -> {
-                final String keya = a.getString("Key", "");
-                final String keyb = b.getString("Key", "");
+            // merge keys
+            final Map<String, JsonObject> servicesMerged = new HashMap<>();
+            for (JsonArray serviceListArray : services) {
+                for (Object serviceObject : serviceListArray) {
+                    final JsonObject serviceJson = (JsonObject) serviceObject;
+                    final String[] keys = serviceJson.getString("Key", "").split("/");
+                    final String key = keys[keys.length - 1];
+                    if (servicesMerged.containsKey(key) && countDeploy == 1) {
+                        log.info("Overriding application : " + key);
+                    }
+                    servicesMerged.put(key, serviceJson);
+                }
+            }
+            // sort keys
+            final List<JsonObject> servicesList = servicesMerged.entrySet().stream().sorted((a, b) -> {
+                final String keya = a.getKey();
+                final String keyb = b.getKey();
                 return keya.compareTo(keyb);
-            }).collect(Collectors.toList());
+            }).map(e -> e.getValue()).collect(Collectors.toList());
+            // compute changes
             for (final JsonObject jsonService : servicesList) {
                 final int modifiedIndex = jsonService.getInteger("ModifyIndex");
                 final String key = jsonService.getString("Key");
                 final String value = jsonService.getString("Value");
+                if (value == null)
+                    continue;
                 indexesByKey.put(key, modifiedIndex);
                 valueByKey.put(key, value);
                 keys.add(key);
@@ -200,6 +258,9 @@ public class ConfigProviderConsul implements ConfigProvider {
                 return lazyValueAsJsonByKey.get(key);
             } else {
                 if (valueByKey.containsKey(key)) {
+                    if (valueByKey.get(key) == null) {
+                        System.out.println();
+                    }
                     final String decoded = new String(Base64.getDecoder().decode(valueByKey.get(key)));
                     lazyValueAsJsonByKey.put(key, new JsonObject(decoded));
                     return lazyValueAsJsonByKey.get(key);
