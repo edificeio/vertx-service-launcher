@@ -60,7 +60,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                             }
                         });
                     } else {
-                        resolution.fail("Service not found : " + identifier);
+                        resolution.fail("Service not found (JAR): " + identifier);
                     }
                 });
             }
@@ -95,7 +95,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                 }
                 s.close();
                 if (id == null && !resolution.isComplete()) {
-                    resolution.fail("Service not found : " + identifier);
+                    resolution.fail("Service not found (MANIFEST): " + identifier);
                 }
             } else {
                 resolution.fail(ar.cause());

@@ -94,12 +94,16 @@ public class ConfigProviderConsul implements ConfigProvider {
                         });
                         final Date date = new Date();
                         req.end(Buffer.buffer(date.getTime() + ""));
-                        final String file = originalConfig.getString("assets-path", ".") + File.separator
-                                + date.getTime() + "-config.json";
-                        vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()), resW -> {
-                            if (resW.failed()) {
-                                log.error("Failed to dump config : ", resW.cause());
-                            }
+                        final String dumpFolder = originalConfig.getString("assets-path", ".") + File.separator
+                                + "history";
+                        final String file = dumpFolder + File.separator + date.getTime() + "-config.json";
+                        vertx.fileSystem().mkdir(dumpFolder, r -> {//mkdir if not exists
+                            vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()),
+                                    resW -> {
+                                        if (resW.failed()) {
+                                            log.error("Failed to dump config : ", resW.cause());
+                                        }
+                                    });
                         });
                     }
                 }).onEmpty(resEmpty -> {
