@@ -3,6 +3,7 @@ package com.opendigitaleducation.launcher;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
@@ -15,6 +16,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
 
     @Override
     public void start() throws Exception {
+        final Boolean clean = config().getBoolean("clean", true);
         deployer = ModuleDeployer.create(vertx, config());
         configProvider = ConfigProvider.create(config()).start(vertx, config());
         configProvider.onConfigChange(resConfig -> {
@@ -25,6 +27,12 @@ public class VertxServiceLauncher extends AbstractVerticle {
                     return deployer.deployAll(resConfig.getServicesToDeploy());
                 }).compose(deploy -> {
                     return deployer.restartAll(resConfig.getServicesToRestart());
+                }).compose(res -> {
+                    if (clean) {
+                        return deployer.cleanAll(resConfig.getServicesToUndeploy());
+                    } else {
+                        return Future.succeededFuture();
+                    }
                 }).setHandler(res -> {
                     if (res.succeeded()) {
                         resConfig.end(true);

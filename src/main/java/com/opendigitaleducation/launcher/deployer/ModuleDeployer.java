@@ -62,6 +62,16 @@ public interface ModuleDeployer {
         return CompositeFuture.all(futures).map(e -> null);
     }
 
+    Future<Void> clean(JsonObject service);
+
+    default Future<Void> cleanAll(List<JsonObject> services) {
+        List<Future> futures = new ArrayList<>();
+        for (final JsonObject service : services) {
+            futures.add(clean(service));
+        }
+        return CompositeFuture.all(futures).map(e -> null);
+    }
+
     static String getServiceIdQuietly(JsonObject service) {
         try {
             return getServiceId(service);

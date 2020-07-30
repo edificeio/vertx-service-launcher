@@ -1,6 +1,8 @@
 package com.opendigitaleducation.launcher.config;
 
 import java.io.File;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
@@ -24,7 +26,7 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 public class ConfigProviderConsul implements ConfigProvider {
-
+    static DateFormat format = new SimpleDateFormat("yyyyMMdd-HHmm");
     static String CONSUL_MODS_CONFIG = "consulMods";
     private static int countDeploy = 0;
     private static final Logger log = LoggerFactory.getLogger(ConfigProviderConsul.class);
@@ -93,10 +95,11 @@ public class ConfigProviderConsul implements ConfigProvider {
                             log.error("Fail to send state for node: " + nodeName, err);
                         });
                         final Date date = new Date();
-                        req.end(Buffer.buffer(date.getTime() + ""));
+                        final String dateFormat = format.format(date);
+                        req.end(Buffer.buffer(dateFormat));
                         final String dumpFolder = originalConfig.getString("assets-path", ".") + File.separator
                                 + "history";
-                        final String file = dumpFolder + File.separator + date.getTime() + "-config.json";
+                        final String file = dumpFolder + File.separator + dateFormat + "-config.json";
                         vertx.fileSystem().mkdir(dumpFolder, r -> {//mkdir if not exists
                             vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()),
                                     resW -> {

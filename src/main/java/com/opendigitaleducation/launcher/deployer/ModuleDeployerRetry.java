@@ -76,4 +76,10 @@ public class ModuleDeployerRetry implements ModuleDeployer {
         return future;
     }
 
+    @Override
+    public Future<Void> clean(JsonObject service) {
+        // dont need to retry
+        return original.clean(service);
+    }
+
 }

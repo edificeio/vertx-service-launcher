@@ -122,43 +122,54 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             });
             return future;
         }
-        //
-        try {
-            final String servicePath = getServicePath(service);
-            log.info("Starting undeployment of mod : " + name);
-            final Future<Void> undeployFuture = Future.future();
-            if (deploymentsIdMap.containsKey(name)) {
-                vertx.undeploy(deploymentsIdMap.get(name), undeployFuture);
-            } else {
-                undeployFuture.complete();
-            }
-            //
-            undeployFuture.setHandler(ar -> {
+        // defaut undeployer
+        log.info("Starting undeployment of mod : " + name);
+        if (deploymentsIdMap.containsKey(name)) {
+            vertx.undeploy(deploymentsIdMap.get(name), ar -> {
                 if (ar.succeeded()) {
                     removeAppVersion(name);
-                    // clean service directory
-                    final String ext = ExtensionRegistry.getExtensionForService(service);
-                    final Future<Void> deleteDir = Future.future();
-                    final Future<Void> deleteArtefact = Future.future();
-                    vertx.fileSystem().deleteRecursive(servicePath, true, deleteDir);
-                    vertx.fileSystem().delete(FileUtils.pathWithExtension(servicePath, ext), deleteArtefact);
-                    CompositeFuture.all(deleteDir, deleteArtefact).setHandler(resDel -> {
-                        if (resDel.failed()) {
-                            log.error(
-                                    "Mod has been undeployed successfully but service directory/artefact could not be cleaned",
-                                    resDel.cause());
-                        } else {
-                            log.info("Mod has been undeployed successfully : " + name);
-                        }
-                        future.complete();
-                    });
+                    log.info("Mod has been undeployed successfully : " + name);
+                    future.complete();
                 } else {
                     log.error("Error undeploying required service  : " + name, ar.cause());
                     future.fail(ar.cause());
                 }
             });
+        } else {
+            log.warn("Deployment ID not found for service : " + name);
+            future.complete();
+        }
+        return future;
+    }
+
+    @Override
+    public Future<Void> clean(JsonObject service) {
+        final String name = service.getString("name");
+        if (name == null || name.isEmpty()) {
+            return Future.succeededFuture();
+        }
+        final Future<Void> future = Future.future();
+        try {
+            log.info("Cleaning mod : " + name);
+            final String servicePath = getServicePath(service);
+            final String ext = ExtensionRegistry.getExtensionForService(service);
+            final Future<Void> deleteDir = Future.future();
+            final Future<Void> deleteArtefact = Future.future();
+            vertx.fileSystem().deleteRecursive(servicePath, true, deleteDir);
+            vertx.fileSystem().delete(FileUtils.pathWithExtension(servicePath, ext), deleteArtefact);
+            //
+            CompositeFuture.all(deleteDir, deleteArtefact).setHandler(resDel -> {
+                if (resDel.failed()) {
+                    log.error("Mod has been cleaned successfully but service directory/artefact could not be cleaned",
+                            resDel.cause());
+                } else {
+                    log.info("Mod has been cleaned successfully : " + name);
+                }
+                future.complete();
+            });
         } catch (Exception e) {
-            future.fail(e);
+            log.error("Failed to clean service : " + name, e);
+            future.complete();
         }
         return future;
     }
@@ -169,18 +180,11 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         if (name == null || name.isEmpty()) {
             return Future.succeededFuture();
         }
-        log.info("Starting restarting of mod : " + name);
-        final Future<Void> undeployFuture = Future.future();
-        if (deploymentsIdMap.containsKey(name)) {
-            vertx.undeploy(deploymentsIdMap.get(name), undeployFuture);
-        } else {
-            undeployFuture.complete();
-        }
+        log.info("Starting restart of mod : " + name);
         //
         final Future<Void> future = Future.future();
-        undeployFuture.setHandler(ar0 -> {
+        undeploy(service).setHandler(ar0 -> {
             if (ar0.succeeded()) {
-                removeAppVersion(name);
                 deploy(service).setHandler(future);
             } else {
                 log.error("Error restarting (undeploying) required service  : " + name, ar0.cause());
@@ -194,7 +198,8 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         final String[] lNameVersion = moduleName.split("~");
         if (lNameVersion.length == 3) {
             versionMap.put(lNameVersion[0] + "." + lNameVersion[1], lNameVersion[2]);
-            deploymentsIdMap.put(lNameVersion[0] + "." + lNameVersion[1], deploymentId);
+            deploymentsIdMap.put(moduleName, deploymentId);// use module name in case of multiple mods with different
+                                                           // versions
         }
     }
 
@@ -202,7 +207,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         final String[] lNameVersion = moduleName.split("~");
         if (lNameVersion.length == 3) {
             versionMap.remove(lNameVersion[0] + "." + lNameVersion[1], lNameVersion[2]);
-            deploymentsIdMap.remove(lNameVersion[0] + "." + lNameVersion[1]);
+            deploymentsIdMap.remove(moduleName);
         }
     }
 }
