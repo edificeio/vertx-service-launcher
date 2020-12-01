@@ -7,7 +7,7 @@ import io.vertx.core.json.JsonObject;
 public interface ConfigProvider {
 
     static ConfigProvider create(JsonObject config) {
-        if (config.containsKey(ConfigProviderConsul.CONSUL_MODS_CONFIG)) {
+        if (config.getBoolean(ConfigProviderConsul.CONSUL_ENABLE, false)) {
             return new ConfigProviderConsul();
         } else {
             return new ConfigProviderMemory();

@@ -27,6 +27,7 @@ import io.vertx.core.logging.LoggerFactory;
 
 public class ConfigProviderConsul implements ConfigProvider {
     static DateFormat format = new SimpleDateFormat("yyyyMMdd-HHmm");
+    static String CONSUL_ENABLE = "consulEnabled";
     static String CONSUL_MODS_CONFIG = "consulMods";
     private static int countDeploy = 0;
     private static final Logger log = LoggerFactory.getLogger(ConfigProviderConsul.class);

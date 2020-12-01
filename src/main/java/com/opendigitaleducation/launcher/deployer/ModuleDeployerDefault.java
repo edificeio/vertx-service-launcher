@@ -155,8 +155,10 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             final String ext = ExtensionRegistry.getExtensionForService(service);
             final Future<Void> deleteDir = Future.future();
             final Future<Void> deleteArtefact = Future.future();
+            final String artefact = FileUtils.pathWithExtension(servicePath, ext);
+            log.info("Deleting dirs : " + servicePath+";"+artefact);
             vertx.fileSystem().deleteRecursive(servicePath, true, deleteDir);
-            vertx.fileSystem().delete(FileUtils.pathWithExtension(servicePath, ext), deleteArtefact);
+            vertx.fileSystem().delete(artefact, deleteArtefact);
             //
             CompositeFuture.all(deleteDir, deleteArtefact).setHandler(resDel -> {
                 if (resDel.failed()) {
