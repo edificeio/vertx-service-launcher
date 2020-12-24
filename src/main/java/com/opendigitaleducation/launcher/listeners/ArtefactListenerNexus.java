@@ -62,7 +62,7 @@ public class ArtefactListenerNexus implements ArtefactListener{
         if(httpServer != null){
             httpServer.close();
         }
-        final boolean enableHmac = config.getBoolean("NEXUS_HMAC_ENABLE", false);
+        final boolean enableHmac = config.getBoolean(NEXUS_HMAC_ENABLE, false);
         final String hmacKey = config.getString(NEXUS_HMACKEY, "");
         final int port = config.getInteger(NEXUS_PORT, 7999);
         final int seconds = config.getInteger(NEXUS_SPAN, 30);
