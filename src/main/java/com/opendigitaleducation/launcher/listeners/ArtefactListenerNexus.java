@@ -10,12 +10,19 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class ArtefactListenerNexus implements ArtefactListener{
+    static String HEADER_KEY = "x-nexus-webhook-signature";
     public static final String NEXUS_ENABLE = "nexusListenerEnabled";
     public static final String NEXUS_PORT = "nexusListenerPort";
     public static final String NEXUS_SPAN = "nexusListenerLockSeconds";
+    public static final String NEXUS_HMAC_ENABLE = "nexusHmacEnable";
+    public static final String NEXUS_HMACKEY = "nexusHmacKey";
     private static final Logger log = LoggerFactory.getLogger(ArtefactListenerNexus.class);
     private HttpServer httpServer;
     private ConfigChangeEventNexus lastEvent;
@@ -55,38 +62,55 @@ public class ArtefactListenerNexus implements ArtefactListener{
         if(httpServer != null){
             httpServer.close();
         }
+        final boolean enableHmac = config.getBoolean("NEXUS_HMAC_ENABLE", false);
+        final String hmacKey = config.getString(NEXUS_HMACKEY, "");
         final int port = config.getInteger(NEXUS_PORT, 7999);
         final int seconds = config.getInteger(NEXUS_SPAN, 30);
         httpServer = vertx.createHttpServer();
         httpServer.requestHandler(reqH->{
             if("POST".equalsIgnoreCase(reqH.method().name())){
                 reqH.bodyHandler(body -> {
-                    final List<String> modules = new ArrayList<>();
-                    final JsonObject res = new JsonObject(body);
-                    if(res.containsKey("action") && "CREATED".equals(res.getString("action"))){
-                        if(res.containsKey("asset")){
-                            final JsonObject asset = res.getJsonObject("asset", new JsonObject());
-                            final String name = asset.getString("name", "");
-                            final boolean acceptExtension = name.endsWith("-fat.jar") || name.endsWith("tar.gz");
-                            if(recentlyTriggered.contains(name) || !acceptExtension){
-                                log.info("SKIP Trigger deploy from nexus for module : " + name);
-                                reqH.response().setStatusCode(200).end(new JsonArray(modules).encode());
+                    try {
+                        final List<String> modules = new ArrayList<>();
+                        if (enableHmac) {
+                            final String verify = reqH.getHeader(HEADER_KEY);
+                            final boolean valid = HMAC.hashIsValid(hmacKey, body.toString(), verify);
+                            if(!valid){
+                                final String computed = HMAC.computeHash(hmacKey, body.toString());
+                                log.error("HMAC signature invalid: "+verify+" / "+computed);
+                                reqH.response().setStatusCode(403).end(new JsonObject().put("error", "invalid hmac").encode());
                                 return;
                             }
-                            for(final Map.Entry<String,JsonObject> entry : names.entrySet()){
-                                if(name.contains(entry.getKey())){
-                                    log.info("Trigger deploy from nexus for module : " + name);
-                                    pushEvent(new ConfigChangeEventNexus(entry.getValue()));
-                                    modules.add(entry.getKey());
-                                }
-                            }
-                            recentlyTriggered.add(name);
-                            vertx.setTimer(seconds*1000, r->{
-                                recentlyTriggered.remove(name);
-                            });
                         }
+                        final JsonObject res = new JsonObject(body);
+                        if (res.containsKey("action") && "CREATED".equals(res.getString("action"))) {
+                            if (res.containsKey("asset")) {
+                                final JsonObject asset = res.getJsonObject("asset", new JsonObject());
+                                final String name = asset.getString("name", "");
+                                final boolean acceptExtension = name.endsWith("-fat.jar") || name.endsWith("tar.gz");
+                                if (recentlyTriggered.contains(name) || !acceptExtension) {
+                                    log.info("SKIP Trigger deploy from nexus for module : " + name);
+                                    reqH.response().setStatusCode(200).end(new JsonArray(modules).encode());
+                                    return;
+                                }
+                                for (final Map.Entry<String, JsonObject> entry : names.entrySet()) {
+                                    if (name.contains(entry.getKey())) {
+                                        log.info("Trigger deploy from nexus for module : " + name);
+                                        pushEvent(new ConfigChangeEventNexus(entry.getValue()));
+                                        modules.add(entry.getKey());
+                                    }
+                                }
+                                recentlyTriggered.add(name);
+                                vertx.setTimer(seconds * 1000, r -> {
+                                    recentlyTriggered.remove(name);
+                                });
+                            }
+                        }
+                        reqH.response().setStatusCode(200).end(new JsonArray(modules).encode());
+                    }catch (Exception e){
+                        reqH.response().setStatusCode(500).end(new JsonObject().put("error", "unknown").encode());
+                        log.error("Failed to respond: ",e);
                     }
-                    reqH.response().setStatusCode(200).end(new JsonArray(modules).encode());
                 });
             }else{
                 reqH.response().setStatusCode(405).end();
@@ -126,8 +150,6 @@ public class ArtefactListenerNexus implements ArtefactListener{
             services.add(service);
         }
 
-
-
         @Override
         public List<JsonObject> getServicesToRestart() {
             return new ArrayList<>();
@@ -149,5 +171,24 @@ public class ArtefactListenerNexus implements ArtefactListener{
             return services.put("services", new JsonArray(this.services));
         }
 
+    }
+
+
+    public static class HMAC
+    {
+
+        public static String computeHash(String secret, String payload) throws InvalidKeyException, NoSuchAlgorithmException
+        {
+            final String digest = "HmacSHA256";
+            final Mac mac = Mac.getInstance(digest);
+            mac.init(new SecretKeySpec(secret.getBytes(), digest));
+            final String base64Hash = new String(Base64.getEncoder().encode(mac.doFinal(payload.getBytes())));
+            return base64Hash;
+        }
+
+        public static boolean hashIsValid(String secret, String payload, String verify) throws InvalidKeyException, NoSuchAlgorithmException
+        {
+            return verify.equals(computeHash(secret, payload));
+        }
     }
 }
