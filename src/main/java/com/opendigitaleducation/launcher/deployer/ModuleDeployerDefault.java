@@ -162,8 +162,8 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             //
             CompositeFuture.all(deleteDir, deleteArtefact).setHandler(resDel -> {
                 if (resDel.failed()) {
-                    log.error("Mod has been cleaned successfully but service directory/artefact could not be cleaned",
-                            resDel.cause());
+                    log.error("Mod has been cleaned successfully but service directory/artefact could not be cleaned: "+
+                            resDel.cause().getMessage());
                 } else {
                     log.info("Mod has been cleaned successfully : " + name);
                 }

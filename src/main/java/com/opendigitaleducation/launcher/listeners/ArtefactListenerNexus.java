@@ -89,7 +89,9 @@ public class ArtefactListenerNexus implements ArtefactListener{
                                 final String name = asset.getString("name", "");
                                 final boolean acceptExtension = name.endsWith("-fat.jar") || name.endsWith("tar.gz");
                                 if (recentlyTriggered.contains(name) || !acceptExtension) {
-                                    log.info("SKIP Trigger deploy from nexus for module : " + name);
+                                    if(!name.endsWith(".sha1") && !name.endsWith(".md5") && !name.endsWith(".pom")){
+                                        log.info("SKIP Trigger deploy from nexus for module : " + name);
+                                    }
                                     reqH.response().setStatusCode(200).end(new JsonArray(modules).encode());
                                     return;
                                 }

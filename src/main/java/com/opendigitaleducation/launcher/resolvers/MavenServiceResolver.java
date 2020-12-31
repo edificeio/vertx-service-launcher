@@ -142,6 +142,8 @@ public class MavenServiceResolver extends AbstactServiceResolver {
                 downloadService(index + 1, identifier, path, repositories, clients, handler);
                 if(resp.statusCode() == 401){
                     log.error("Failed to authenticate to maven repo: " + uri);
+                } else if(index+1 == repositories.size()){
+                    log.error("Failed to download service: "+ resp.statusCode()+" -- "+ uri);
                 }
             }
         });

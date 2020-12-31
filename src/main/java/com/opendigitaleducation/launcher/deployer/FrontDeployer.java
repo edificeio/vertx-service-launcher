@@ -139,16 +139,15 @@ class FrontDeployer implements CustomDeployer {
             final String servicePath = getServicePath(service);
             // delete output and service path
             vertx.fileSystem().deleteRecursive(outputPath, true, res1 -> {
-                if (res1.succeeded()) {
-                    vertx.fileSystem().deleteRecursive(servicePath, true, res2 -> {
-                        if (res2.succeeded()) {
-                        } else {
-                            result.handle(new DefaultAsyncResult<>(res2.cause()));
-                        }
-                    });
-                } else {
-                    result.handle(new DefaultAsyncResult<>(res1.cause()));
+                if (res1.failed()) {
+                    log.warn("Could not delete :"+outputPath, res1.cause());
                 }
+                vertx.fileSystem().deleteRecursive(servicePath, true, res2 -> {
+                    if (res2.failed()) {
+                        log.warn("Could not delete :"+servicePath, res2.cause());
+                    }
+                    result.handle(new DefaultAsyncResult<>(res2.cause()));
+                });
             });
         } catch (Exception e) {
             result.handle(new DefaultAsyncResult<>(e));
