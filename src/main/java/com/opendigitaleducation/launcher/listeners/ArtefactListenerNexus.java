@@ -21,6 +21,7 @@ public class ArtefactListenerNexus implements ArtefactListener{
     public static final String NEXUS_ENABLE = "nexusListenerEnabled";
     public static final String NEXUS_PORT = "nexusListenerPort";
     public static final String NEXUS_SPAN = "nexusListenerLockSeconds";
+    public static final String NEXUS_DELAY = "nexusListenerDelaySeconds";
     public static final String NEXUS_HMAC_ENABLE = "nexusHmacEnable";
     public static final String NEXUS_HMACKEY = "nexusHmacKey";
     private static final Logger log = LoggerFactory.getLogger(ArtefactListenerNexus.class);
@@ -66,6 +67,7 @@ public class ArtefactListenerNexus implements ArtefactListener{
         final String hmacKey = config.getString(NEXUS_HMACKEY, "");
         final int port = config.getInteger(NEXUS_PORT, 7999);
         final int seconds = config.getInteger(NEXUS_SPAN, 30);
+        final int delaySeconds = config.getInteger(NEXUS_DELAY, 5);
         httpServer = vertx.createHttpServer();
         httpServer.requestHandler(reqH->{
             if("POST".equalsIgnoreCase(reqH.method().name())){
@@ -97,8 +99,12 @@ public class ArtefactListenerNexus implements ArtefactListener{
                                 }
                                 for (final Map.Entry<String, JsonObject> entry : names.entrySet()) {
                                     if (name.contains(entry.getKey())) {
-                                        log.info("Trigger deploy from nexus for module : " + name);
-                                        pushEvent(new ConfigChangeEventNexus(entry.getValue()));
+                                        final JsonObject value = entry.getValue();
+                                        //nexus need some delay to return the last artefact when deploy
+                                        vertx.setTimer(delaySeconds * 1000, r->{
+                                            log.info("Trigger deploy from nexus for module : " + name);
+                                            pushEvent(new ConfigChangeEventNexus(value));
+                                        });
                                         modules.add(entry.getKey());
                                     }
                                 }
