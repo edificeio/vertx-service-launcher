@@ -4,7 +4,9 @@ import static com.opendigitaleducation.launcher.FolderServiceFactory.FACTORY_PRE
 
 import java.io.File;
 import java.util.List;
+import java.util.Optional;
 
+import com.opendigitaleducation.launcher.hooks.Hook;
 import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 
@@ -18,6 +20,7 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.LocalMap;
 
 public class ModuleDeployerDefault implements ModuleDeployer {
+    private final Optional<Hook> hook;
     private final String assetPath;
     private final boolean cluster;
     private final String node;
@@ -46,6 +49,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         //
         this.servicesPath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
         customDeployer = new CustomDeployerManager(vertx, servicesPath, assetPath);
+        hook = Hook.create(vertx, config);
     }
 
     protected String getServicePath(JsonObject service) throws Exception {
@@ -81,6 +85,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 if (res.succeeded()) {
                     log.info("Custom deployment succeed :" + name);
                     future.complete();
+                    if(hook.isPresent()){
+                        hook.get().emit(service, Hook.HookEvents.Deployed);
+                    }
                 } else {
                     log.error("Custom deployment failed :" + name, res.cause());
                     future.fail(res.cause());
@@ -94,6 +101,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 log.info("Mod has been deployed successfully : " + name);
                 addAppVersion(name, ar.result());
                 future.complete();
+                if(hook.isPresent()){
+                    hook.get().emit(service, Hook.HookEvents.Deployed);
+                }
             } else {
                 log.error("Error deploying required service  : " + name, ar.cause());
                 future.fail(ar.cause());
@@ -115,6 +125,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 if (res.succeeded()) {
                     log.info("Custom undeployment succeed :" + name);
                     future.complete();
+                    if(hook.isPresent()){
+                        hook.get().emit(service, Hook.HookEvents.Undeployed);
+                    }
                 } else {
                     log.error("Custom undeployment failed :" + name, res.cause());
                     future.fail(res.cause());
@@ -130,6 +143,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                     removeAppVersion(name);
                     log.info("Mod has been undeployed successfully : " + name);
                     future.complete();
+                    if(hook.isPresent()){
+                        hook.get().emit(service, Hook.HookEvents.Undeployed);
+                    }
                 } else {
                     log.error("Error undeploying required service  : " + name, ar.cause());
                     future.fail(ar.cause());
