@@ -81,22 +81,37 @@ class FrontDeployer implements CustomDeployer {
         try {
             final String outputPath = getOutputPath(service);
             final String distPath = getDistPath(service);
-            // clean and recreate
-            vertx.fileSystem().deleteRecursive(outputPath, true, resDelete -> {
+            if(service.getBoolean("skip-clean", false)){
+                final String moduleName = service.getString("name");
+                log.info("Skipping clean for mods: "+moduleName);
+                // dont clean
                 vertx.fileSystem().mkdirs(outputPath, resMkdir -> {
-                    if (resMkdir.succeeded()) {
-                        vertx.fileSystem().copyRecursive(distPath, outputPath, true, resCopy -> {
-                            if (resCopy.succeeded()) {
-                                result.handle(new DefaultAsyncResult<>(null));
-                            } else {
-                                result.handle(resCopy);
-                            }
-                        });
-                    } else {
-                        result.handle(resMkdir);
-                    }
+                    vertx.fileSystem().copyRecursive(distPath, outputPath, true, resCopy -> {
+                        if (resCopy.succeeded()) {
+                            result.handle(new DefaultAsyncResult<>(null));
+                        } else {
+                            result.handle(resCopy);
+                        }
+                    });
                 });
-            });
+            }else{
+                // clean and recreate
+                vertx.fileSystem().deleteRecursive(outputPath, true, resDelete -> {
+                    vertx.fileSystem().mkdirs(outputPath, resMkdir -> {
+                        if (resMkdir.succeeded()) {
+                            vertx.fileSystem().copyRecursive(distPath, outputPath, true, resCopy -> {
+                                if (resCopy.succeeded()) {
+                                    result.handle(new DefaultAsyncResult<>(null));
+                                } else {
+                                    result.handle(resCopy);
+                                }
+                            });
+                        } else {
+                            result.handle(resMkdir);
+                        }
+                    });
+                });
+            }
         } catch (Exception e) {
             result.handle(new DefaultAsyncResult<>(e));
         }
@@ -137,6 +152,12 @@ class FrontDeployer implements CustomDeployer {
         try {
             final String outputPath = getOutputPath(service);
             final String servicePath = getServicePath(service);
+            final String moduleName = service.getString("name");
+            if(service.getBoolean("skip-clean", false)) {
+                log.info("Skipping clean for mods: "+moduleName);
+                result.handle(new DefaultAsyncResult<>((Void)null));
+                return;
+            }
             // delete output and service path
             vertx.fileSystem().deleteRecursive(outputPath, true, res1 -> {
                 if (res1.failed()) {
