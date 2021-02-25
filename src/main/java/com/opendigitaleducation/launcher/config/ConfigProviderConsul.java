@@ -58,7 +58,46 @@ public class ConfigProviderConsul implements ConfigProvider {
         for (Handler<ConfigChangeEvent> h : handlers) {
             h.handle(event);
         }
-        lastEvent = (ConfigChangeEventConsul) event;
+        if(event instanceof ConfigChangeEventConsul) {
+            lastEvent = (ConfigChangeEventConsul) event;
+        }else{
+            lastEvent = new ConfigChangeEventConsul(event);
+        }
+    }
+
+    @Override
+    public ConfigProvider triggerChange(ConfigChangeEvent event) {
+        doPush(event);
+        return this;
+    }
+
+    private void doPush(ConfigChangeEvent event){
+        pushEvent(event.onEnd(onFinish -> {
+            initTimer();
+            final HttpClientRequest req = client.putAbs(urlSync + nodeName, resPut -> {
+                // do nothing
+                log.info(String.format("Node %s is synced with consul: ", nodeName));
+            });
+            req.exceptionHandler(err -> {
+                log.error("Fail to send state for node: " + nodeName, err);
+            });
+            final Date date = new Date();
+            final String dateFormat = format.format(date);
+            req.end(Buffer.buffer(dateFormat));
+            final String dumpFolder = originalConfig.getString("assets-path", ".") + File.separator
+                + "history";
+            final String file = dumpFolder + File.separator + dateFormat + "-config.json";
+            vertx.fileSystem().mkdir(dumpFolder, r -> {//mkdir if not exists
+                vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()),
+                    resW -> {
+                        if (resW.failed()) {
+                            log.error("Failed to dump config : ", resW.cause());
+                        }
+                    });
+            });
+        }).onEmpty(resEmpty -> {
+            initTimer();
+        }));
     }
 
     private void reload() {
@@ -85,34 +124,7 @@ public class ConfigProviderConsul implements ConfigProvider {
                 countDeploy++;
                 final ConfigChangeEventConsul event = new ConfigChangeEventConsul(originalConfig, res.result().list(),
                         lastEvent);
-                pushEvent(event.onEnd(onFinish -> {
-                    initTimer();
-                    if (onFinish) {
-                        final HttpClientRequest req = client.putAbs(urlSync + nodeName, resPut -> {
-                            // do nothing
-                            log.info(String.format("Node %s is synced with consul", nodeName));
-                        });
-                        req.exceptionHandler(err -> {
-                            log.error("Fail to send state for node: " + nodeName, err);
-                        });
-                        final Date date = new Date();
-                        final String dateFormat = format.format(date);
-                        req.end(Buffer.buffer(dateFormat));
-                        final String dumpFolder = originalConfig.getString("assets-path", ".") + File.separator
-                                + "history";
-                        final String file = dumpFolder + File.separator + dateFormat + "-config.json";
-                        vertx.fileSystem().mkdir(dumpFolder, r -> {//mkdir if not exists
-                            vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()),
-                                    resW -> {
-                                        if (resW.failed()) {
-                                            log.error("Failed to dump config : ", resW.cause());
-                                        }
-                                    });
-                        });
-                    }
-                }).onEmpty(resEmpty -> {
-                    initTimer();
-                }));
+                doPush(event);
             } else {
                 initTimer();
             }
@@ -196,6 +208,16 @@ public class ConfigProviderConsul implements ConfigProvider {
 
         ConfigChangeEventConsul() {
             originalConfig = new JsonObject();
+        }
+
+        ConfigChangeEventConsul(ConfigChangeEvent event) {
+            originalConfig = new JsonObject();
+            this.toDeploy = event.getServicesToDeploy();
+            this.toUndeploy = event.getServicesToUndeploy();
+            this.toRestart = event.getServicesToRestart();
+            for(Handler<Boolean> h : event.getEndHandlers()){
+                this.onEnd(h);
+            }
         }
 
         ConfigChangeEventConsul(JsonObject originalConfig, List<JsonArray> services, ConfigChangeEventConsul previous) {

@@ -7,8 +7,13 @@ import io.vertx.core.Handler;
 import io.vertx.core.json.JsonObject;
 
 public abstract class ConfigChangeEvent {
+    private boolean forceClean = false;
     private List<Handler<Boolean>> endHandlers = new ArrayList<>();
     private List<Handler<Void>> emptyHandlers = new ArrayList<>();
+
+    public boolean isForceClean() {
+        return forceClean;
+    }
 
     public abstract JsonObject getDump();
 
@@ -44,6 +49,15 @@ public abstract class ConfigChangeEvent {
         for (final Handler<Boolean> h : endHandlers) {
             h.handle(success);
         }
+        return this;
+    }
+
+    public List<Handler<Boolean>> getEndHandlers() {
+        return endHandlers;
+    }
+
+    public ConfigChangeEvent setForceClean(boolean forceClean) {
+        this.forceClean = forceClean;
         return this;
     }
 }

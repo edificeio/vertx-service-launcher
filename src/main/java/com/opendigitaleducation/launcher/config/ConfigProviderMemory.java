@@ -36,6 +36,12 @@ public class ConfigProviderMemory implements ConfigProvider {
     }
 
     @Override
+    public ConfigProvider triggerChange(ConfigChangeEvent event) {
+        //DO NOTHING
+        return this;
+    }
+
+    @Override
     public ConfigProvider stop(Vertx vertx) {
         return this;
     }

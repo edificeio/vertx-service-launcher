@@ -14,12 +14,14 @@ import java.util.Optional;
 public class VertxServiceLauncher extends AbstractVerticle {
 
     private static final Logger log = LoggerFactory.getLogger(VertxServiceLauncher.class);
-
+    private static int countDeployments = 0;
     private ConfigProvider configProvider;
     private Optional<ArtefactListener> artefactListener = Optional.empty();
     private ModuleDeployer deployer;
     private void onChangeEvent(final ConfigChangeEvent resConfig, final boolean clean){
         if (resConfig.hasPendingTasks()) {
+            countDeployments++;
+            log.info("Starting deployment: "+countDeployments);
             deployer.undeployAll(resConfig.getServicesToUndeploy()).compose(res -> {
                 if (clean) {
                     return deployer.cleanAll(resConfig.getServicesToUndeploy());
@@ -33,11 +35,12 @@ public class VertxServiceLauncher extends AbstractVerticle {
             }).compose(deploy -> {
                 return deployer.restartAll(resConfig.getServicesToRestart());
             }).setHandler(res -> {
+                log.info("End deployment: "+countDeployments + "("+res.succeeded()+")"+ "| handlers="+resConfig.getEndHandlers().size());
                 if (res.succeeded()) {
                     resConfig.end(true);
                 } else {
                     resConfig.end(false);
-                    log.error("Config has not been applyed because of : " + res.cause().getMessage());
+                    log.error("Config has not been applied because of : " + res.cause().getMessage());
                 }
             });
         } else {
@@ -50,13 +53,13 @@ public class VertxServiceLauncher extends AbstractVerticle {
         deployer = ModuleDeployer.create(vertx, config());
         configProvider = ConfigProvider.create(config()).start(vertx, config());
         configProvider.onConfigChange(resConfig -> {
-            onChangeEvent(resConfig, clean);
+            onChangeEvent(resConfig, clean || resConfig.isForceClean());
         });
         artefactListener = ArtefactListener.create(configProvider, config());
         if(artefactListener.isPresent()){
             artefactListener.get().start(vertx, config());
             artefactListener.get().onArtefactChange( res -> {
-               onChangeEvent(res, true);
+                configProvider.triggerChange(res.setForceClean(true));
             });
         }
     }

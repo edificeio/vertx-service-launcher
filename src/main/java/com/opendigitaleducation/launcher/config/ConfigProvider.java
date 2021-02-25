@@ -14,6 +14,8 @@ public interface ConfigProvider {
         }
     }
 
+    ConfigProvider triggerChange(ConfigChangeEvent event);
+
     ConfigProvider onConfigChange(Handler<ConfigChangeEvent> handler);
 
     ConfigProvider start(Vertx vertx, JsonObject config);
