@@ -76,7 +76,7 @@ public class ConfigProviderConsul implements ConfigProvider {
             initTimer();
             final HttpClientRequest req = client.putAbs(urlSync + nodeName, resPut -> {
                 // do nothing
-                log.info(String.format("Node %s is synced with consul: ", nodeName));
+                log.info(String.format("Node %s is synced with consul", nodeName));
             });
             req.exceptionHandler(err -> {
                 log.error("Fail to send state for node: " + nodeName, err);

@@ -35,7 +35,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
             }).compose(deploy -> {
                 return deployer.restartAll(resConfig.getServicesToRestart());
             }).setHandler(res -> {
-                log.info("End deployment: "+countDeployments + "("+res.succeeded()+")"+ "| handlers="+resConfig.getEndHandlers().size());
+                log.info("End deployment: "+countDeployments + " ("+res.succeeded()+")");
                 if (res.succeeded()) {
                     resConfig.end(true);
                 } else {
