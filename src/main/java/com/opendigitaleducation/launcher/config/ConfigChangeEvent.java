@@ -17,6 +17,14 @@ public abstract class ConfigChangeEvent {
 
     public abstract JsonObject getDump();
 
+    public List<JsonObject> getAll(){
+        final List<JsonObject> all = new ArrayList<>();
+        all.addAll(getServicesToRestart());
+        all.addAll(getServicesToUndeploy());
+        all.addAll(getServicesToDeploy());
+        return all;
+    }
+
     public abstract List<JsonObject> getServicesToRestart();
 
     public abstract List<JsonObject> getServicesToUndeploy();

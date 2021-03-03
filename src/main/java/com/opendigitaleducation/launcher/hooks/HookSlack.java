@@ -13,14 +13,14 @@ import java.util.Set;
 
 public class HookSlack implements Hook {
     static final Logger log = LoggerFactory.getLogger(HookSlack.class);
-    private final HttpClient client;
     private final String slackHook;
     private final String nodeName;
     private final String hostName;
+    private final Vertx vertx;
     public HookSlack(final Vertx vertx, final JsonObject config){
         String tmpHostName;
+        this.vertx = vertx;
         this.slackHook = config.getString("slackHook");
-        this.client = vertx.createHttpClient();
         this.nodeName = config.getString("node", config.getString("consuleNode", "unknown"));
         try {
             final InetAddress addr = InetAddress.getLocalHost();
@@ -31,11 +31,13 @@ public class HookSlack implements Hook {
         }
         this.hostName = tmpHostName;
     }
+
     @Override
     public void emit(JsonObject service, Set<HookEvents> events){
         try{
             if(events.contains(HookEvents.Deployed)) {
                 final String name = service.getString("name").replaceAll("~", " ");
+                final HttpClient client = vertx.createHttpClient();
                 final HttpClientRequest req = client.postAbs(slackHook, e -> {
                     if (e.statusCode() != 200) {
                         log.error("Slack hook bad status: " + e.statusCode() + "/" + e.statusMessage());

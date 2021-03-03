@@ -2,6 +2,7 @@ package com.opendigitaleducation.launcher;
 
 import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
+import com.opendigitaleducation.launcher.config.ConfigProviderListenerAssets;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
 import com.opendigitaleducation.launcher.listeners.ArtefactListener;
 import io.vertx.core.AbstractVerticle;
@@ -21,7 +22,8 @@ public class VertxServiceLauncher extends AbstractVerticle {
     private void onChangeEvent(final ConfigChangeEvent resConfig, final boolean clean){
         if (resConfig.hasPendingTasks()) {
             countDeployments++;
-            log.info("Starting deployment: "+countDeployments);
+            final int count = countDeployments;
+            log.info(String.format("Starting deployment %s: (deployed=%s, undeployed=%s, restart=%s)", countDeployments, resConfig.getServicesToDeploy().size(), resConfig.getServicesToUndeploy().size(), resConfig.getServicesToRestart().size()));
             deployer.undeployAll(resConfig.getServicesToUndeploy()).compose(res -> {
                 if (clean) {
                     return deployer.cleanAll(resConfig.getServicesToUndeploy());
@@ -35,7 +37,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
             }).compose(deploy -> {
                 return deployer.restartAll(resConfig.getServicesToRestart());
             }).setHandler(res -> {
-                log.info("End deployment: "+countDeployments + " ("+res.succeeded()+")");
+                log.info(String.format("End deployment %s: (deployed=%s, undeployed=%s, restart=%s)", count, resConfig.getServicesToDeploy().size(), resConfig.getServicesToUndeploy().size(), resConfig.getServicesToRestart().size()));
                 if (res.succeeded()) {
                     resConfig.end(true);
                 } else {
@@ -52,6 +54,9 @@ public class VertxServiceLauncher extends AbstractVerticle {
         final Boolean clean = config().getBoolean("clean", true);
         deployer = ModuleDeployer.create(vertx, config());
         configProvider = ConfigProvider.create(config()).start(vertx, config());
+        if(config().getBoolean("redeploy-assets-onclean", true)) {
+            configProvider.addListener(new ConfigProviderListenerAssets());
+        }
         configProvider.onConfigChange(resConfig -> {
             onChangeEvent(resConfig, clean || resConfig.isForceClean());
         });

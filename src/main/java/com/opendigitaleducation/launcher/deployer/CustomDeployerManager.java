@@ -16,7 +16,7 @@ public class CustomDeployerManager implements CustomDeployer {
     public CustomDeployerManager(Vertx vertx, String servicesPath, String assetPath) {
         this.serviceResolver = new ServiceResolverFactory();
         this.serviceResolver.init(vertx, servicesPath);
-        deployers.add(new FrontDeployer(vertx, servicesPath, assetPath, serviceResolver));
+        deployers.add(new CustomDeployerFront(vertx, servicesPath, assetPath, serviceResolver));
     }
 
     public boolean canDeploy(JsonObject service) {

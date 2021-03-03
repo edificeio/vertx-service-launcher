@@ -21,4 +21,6 @@ public interface ConfigProvider {
     ConfigProvider start(Vertx vertx, JsonObject config);
 
     ConfigProvider stop(Vertx vertx);
+
+    ConfigProvider addListener(ConfigProviderListener listener);
 }

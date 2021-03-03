@@ -41,6 +41,7 @@ public class ConfigProviderConsul implements ConfigProvider {
     private JsonObject originalConfig;
     private ConfigChangeEventConsul lastEvent = new ConfigChangeEventConsul();
     private final List<Handler<ConfigChangeEvent>> handlers = new ArrayList<>();
+    private final List<ConfigProviderListener> listeners = new ArrayList<>();
 
     public ConfigProviderConsul() {
     }
@@ -60,23 +61,25 @@ public class ConfigProviderConsul implements ConfigProvider {
         }
         if(event instanceof ConfigChangeEventConsul) {
             lastEvent = (ConfigChangeEventConsul) event;
-        }else{
-            lastEvent = new ConfigChangeEventConsul(event);
         }
+        //do not save lastEvent if not of type Consul(it used for compare)
     }
 
     @Override
     public ConfigProvider triggerChange(ConfigChangeEvent event) {
+        log.info(String.format("Node %s is triggering deployment (deploy=%s, undeploy=%s, restart=%s)", nodeName, event.getServicesToDeploy().size(), event.getServicesToUndeploy().size(), event.getServicesToRestart().size()));
         doPush(event);
         return this;
     }
 
     private void doPush(ConfigChangeEvent event){
+        triggerBeforeChange(event);
         pushEvent(event.onEnd(onFinish -> {
+            triggerAfterChange(event, true);
             initTimer();
             final HttpClientRequest req = client.putAbs(urlSync + nodeName, resPut -> {
                 // do nothing
-                log.info(String.format("Node %s is synced with consul", nodeName));
+                log.info(String.format("Node %s is synced with consul (deployed=%s, undeployed=%s, restart=%s)", nodeName, event.getServicesToDeploy().size(), event.getServicesToUndeploy().size(), event.getServicesToRestart().size()));
             });
             req.exceptionHandler(err -> {
                 log.error("Fail to send state for node: " + nodeName, err);
@@ -97,6 +100,7 @@ public class ConfigProviderConsul implements ConfigProvider {
             });
         }).onEmpty(resEmpty -> {
             initTimer();
+            triggerAfterChange(event, false);
         }));
     }
 
@@ -210,12 +214,22 @@ public class ConfigProviderConsul implements ConfigProvider {
             originalConfig = new JsonObject();
         }
 
-        ConfigChangeEventConsul(ConfigChangeEvent event) {
+        ConfigChangeEventConsul(ConfigChangeEvent current, ConfigChangeEvent lastEvent) {
             originalConfig = new JsonObject();
-            this.toDeploy = event.getServicesToDeploy();
-            this.toUndeploy = event.getServicesToUndeploy();
-            this.toRestart = event.getServicesToRestart();
-            for(Handler<Boolean> h : event.getEndHandlers()){
+            //init from last event
+            this.toDeploy.addAll(lastEvent.getServicesToDeploy());
+            this.toUndeploy.addAll(lastEvent.getServicesToUndeploy());
+            this.toRestart.addAll(lastEvent.getServicesToRestart());
+            //remove all services from current event and add it anew
+            final List<JsonObject> all = current.getAll();
+            this.toDeploy.removeAll(all);
+            this.toUndeploy.removeAll(all);
+            this.toRestart.removeAll(all);
+            //add all services from current event
+            this.toDeploy.addAll(current.getServicesToDeploy());
+            this.toUndeploy.addAll(current.getServicesToUndeploy());
+            this.toRestart.addAll(current.getServicesToRestart());
+            for(Handler<Boolean> h : current.getEndHandlers()){
                 this.onEnd(h);
             }
         }
@@ -345,4 +359,21 @@ public class ConfigProviderConsul implements ConfigProvider {
 
     }
 
+    protected void triggerBeforeChange(ConfigChangeEvent event){
+        for(final ConfigProviderListener l : listeners){
+            l.beforeConfigChange(event);
+        }
+    }
+
+    protected void triggerAfterChange(ConfigChangeEvent event, boolean success){
+        for(final ConfigProviderListener l : listeners){
+            l.afterConfigChange(event, success);
+        }
+    }
+
+    @Override
+    public ConfigProvider addListener(ConfigProviderListener listener) {
+        listeners.add(listener);
+        return this;
+    }
 }

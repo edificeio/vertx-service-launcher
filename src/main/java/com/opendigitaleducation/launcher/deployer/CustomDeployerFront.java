@@ -1,6 +1,5 @@
 package com.opendigitaleducation.launcher.deployer;
 
-import com.opendigitaleducation.launcher.FolderServiceFactory;
 import com.opendigitaleducation.launcher.resolvers.ServiceResolverFactory;
 import com.opendigitaleducation.launcher.utils.DefaultAsyncResult;
 import com.opendigitaleducation.launcher.utils.ZipUtils;
@@ -16,8 +15,8 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
-class FrontDeployer implements CustomDeployer {
-    static Logger log = LoggerFactory.getLogger(FrontDeployer.class);
+public class CustomDeployerFront implements CustomDeployer {
+    static Logger log = LoggerFactory.getLogger(CustomDeployerFront.class);
     private static final String ASSETS_TYPES = "assets";
     private final Vertx vertx;
     private final String servicesPath;
@@ -32,12 +31,22 @@ class FrontDeployer implements CustomDeployer {
         outputForTypes.put(ASSETS_TYPES, "assets");
     }
 
-    public FrontDeployer(Vertx vertx, String servicesPath, String assetPath, ServiceResolverFactory resolver) {
+    public CustomDeployerFront(Vertx vertx, String servicesPath, String assetPath, ServiceResolverFactory resolver) {
         this.vertx = vertx;
         this.assetPath = assetPath;
         this.servicesPath = servicesPath;
         this.serviceResolver = resolver;
 
+    }
+
+    public static boolean isAssetsService(JsonObject service) {
+        final String type = service.getString("type");
+        return (ASSETS_TYPES.equals(type));
+    }
+
+    public static boolean canDeployService(JsonObject service) {
+        final String type = service.getString("type");
+        return outputForTypes.containsKey(type);
     }
 
     @Override

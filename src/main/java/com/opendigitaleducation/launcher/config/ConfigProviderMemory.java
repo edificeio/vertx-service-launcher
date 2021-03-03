@@ -77,4 +77,9 @@ public class ConfigProviderMemory implements ConfigProvider {
 
     }
 
+    @Override
+    public ConfigProvider addListener(ConfigProviderListener listener) {
+        return this;
+    }
+
 }
