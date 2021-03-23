@@ -81,8 +81,9 @@ public class CustomDeployerFront implements CustomDeployer {
         if (lNameVersion.length < 2) {
             throw new Exception("[FrontDeployer] Invalid name : " + moduleName);
         }
+        final String destDirName = service.getString("output-dir-name", lNameVersion[1]);
         final String outputPath = assetPath + (assetPath.endsWith(File.separator) ? "" : File.separator) + assetDir
-                + File.separator + outputDir + File.separator + lNameVersion[1];
+                + File.separator + outputDir + File.separator + destDirName;
         return outputPath;
     }
 
