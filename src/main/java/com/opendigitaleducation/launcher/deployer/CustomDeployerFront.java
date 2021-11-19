@@ -6,22 +6,30 @@ import com.opendigitaleducation.launcher.utils.ZipUtils;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 import java.io.File;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 public class CustomDeployerFront implements CustomDeployer {
     static Logger log = LoggerFactory.getLogger(CustomDeployerFront.class);
+    private static final String MODSINFO_MAP_NAME= "modsInfoMap";
+    private static final String MODSINFO_CHANGED_EVENT_NAME= "modsInfoChanged";
     private static final String ASSETS_TYPES = "assets";
     private final Vertx vertx;
     private final String servicesPath;
     private final String assetPath;
     private final ServiceResolverFactory serviceResolver;
+    private final DateFormat deployedAt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
+
 
     static final Map<String, String> outputForTypes = new HashMap<>();
     {
@@ -75,53 +83,83 @@ public class CustomDeployerFront implements CustomDeployer {
             return assetPath + File.separator + ASSETS_TYPES;
         }
         final String outputDir = service.getString("output-dir", outputForTypes.getOrDefault(type, ""));
-        final String moduleName = service.getString("name");
-        final String[] lNameVersion = moduleName.split("~");
         final String assetDir = service.getString("assets-dir", "assets");
-        if (lNameVersion.length < 2) {
-            throw new Exception("[FrontDeployer] Invalid name : " + moduleName);
-        }
+        final String[] lNameVersion = getModOwnerNameVersion(service);
         final String destDirName = service.getString("output-dir-name", lNameVersion[1]);
         final String outputPath = assetPath + (assetPath.endsWith(File.separator) ? "" : File.separator) + assetDir
                 + File.separator + outputDir + File.separator + destDirName;
         return outputPath;
     }
 
+    /**
+     * Return an array containing respectively the owner, name and MAYBE the version.
+     * Be sure to check the array size before accessing the version, at index 2.
+     * @param service The service JSON 
+     * @return an array of size 2 or 3
+     * @throws Exception when the service has no name at index 1.
+     */
+    protected String[] getModOwnerNameVersion(JsonObject service) throws Exception {
+        final String moduleName = service.getString("name");
+        final String[] lNameVersion = moduleName.split("~");
+        if (lNameVersion.length < 2) {
+            throw new Exception("[FrontDeployer] Invalid name : " + moduleName);
+        }
+        return lNameVersion;
+    }
+
+    protected void makeDirAndCopyRecursive(String from, String to, Handler<AsyncResult<Void>> result) {
+        vertx.fileSystem().mkdirs(to, resMkdir -> {
+            if (resMkdir.succeeded()) {
+                vertx.fileSystem().copyRecursive( from, to, true, result );
+            } else {
+                result.handle(resMkdir);
+            }
+        });
+    }
+
     protected void doDeploy(JsonObject service, Handler<AsyncResult<Void>> result) {
         try {
             final String outputPath = getOutputPath(service);
             final String distPath = getDistPath(service);
+            final String[] lNameVersion = getModOwnerNameVersion(service);
+            final Promise<Void> deployment = Promise.promise();
             if(service.getBoolean("skip-clean", false)){
                 final String moduleName = service.getString("name");
                 log.info("Skipping clean for mods: "+moduleName);
                 // dont clean
-                vertx.fileSystem().mkdirs(outputPath, resMkdir -> {
-                    vertx.fileSystem().copyRecursive(distPath, outputPath, true, resCopy -> {
-                        if (resCopy.succeeded()) {
-                            result.handle(new DefaultAsyncResult<>(null));
-                        } else {
-                            result.handle(resCopy);
-                        }
-                    });
-                });
-            }else{
+                makeDirAndCopyRecursive(distPath, outputPath, deployment::handle);
+            } else {
                 // clean and recreate
                 vertx.fileSystem().deleteRecursive(outputPath, true, resDelete -> {
-                    vertx.fileSystem().mkdirs(outputPath, resMkdir -> {
-                        if (resMkdir.succeeded()) {
-                            vertx.fileSystem().copyRecursive(distPath, outputPath, true, resCopy -> {
-                                if (resCopy.succeeded()) {
-                                    result.handle(new DefaultAsyncResult<>(null));
-                                } else {
-                                    result.handle(resCopy);
-                                }
-                            });
-                        } else {
-                            result.handle(resMkdir);
-                        }
-                    });
+                    makeDirAndCopyRecursive(distPath, outputPath, deployment::handle);
                 });
             }
+
+            deployment.future().onComplete( resDeploy -> {
+                if( resDeploy.succeeded() ) {
+                    // Prepare the new module infos.
+                    final String version = lNameVersion.length > 2 ? lNameVersion[2] : "";
+                    Map<String, Object> infosMap = new HashMap<String, Object>();
+                    infosMap.put( "name", lNameVersion[1] );
+                    infosMap.put( "version", version );
+                    infosMap.put( "outputPath", outputPath );
+                    infosMap.put( "distPath", distPath );
+                    infosMap.put( "deployedAt", deployedAt.format(new Date()) );
+                    // Update the information in local shared map, then signal the change.
+                    // At least one Lambda (modVersion) in web-utils is listening to this event.
+                    final Map<String, JsonObject> sharedMods = vertx.sharedData().getLocalMap(MODSINFO_MAP_NAME);
+                    final JsonObject infos = new JsonObject(infosMap);
+                    sharedMods.put(lNameVersion[1], infos);
+                    vertx.eventBus().publish(MODSINFO_CHANGED_EVENT_NAME, infos);
+
+                    log.info("CustomDeployerFront.deployment.onComplete : "+ infosMap.toString());
+
+                    // Finish handling the deployment.
+                    result.handle(new DefaultAsyncResult<>(null));
+                } else {
+                    result.handle( resDeploy );
+                }
+            });
         } catch (Exception e) {
             result.handle(new DefaultAsyncResult<>(e));
         }
