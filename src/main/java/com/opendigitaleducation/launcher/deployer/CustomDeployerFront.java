@@ -94,7 +94,7 @@ public class CustomDeployerFront implements CustomDeployer {
     /**
      * Return an array containing respectively the owner, name and MAYBE the version.
      * Be sure to check the array size before accessing the version, at index 2.
-     * @param service The service JSON 
+     * @param service The service JSON
      * @return an array of size 2 or 3
      * @throws Exception when the service has no name at index 1.
      */
@@ -215,7 +215,7 @@ public class CustomDeployerFront implements CustomDeployer {
                     if (res2.failed()) {
                         log.warn("Could not delete :"+servicePath, res2.cause());
                     }
-                    result.handle(new DefaultAsyncResult<>(res2.cause()));
+                    result.handle(new DefaultAsyncResult<>((Void)null));
                 });
             });
         } catch (Exception e) {
