@@ -20,11 +20,12 @@ public interface Hook {
 
     void emit(JsonObject service, Set<HookEvents> events);
 
-    static Optional<Hook> create(final Vertx vertx, final JsonObject config){
+    static Hook create(final Vertx vertx, final JsonObject config){
+        final HookList hooks = new HookList();
+        hooks.add(new HookCustomEvent(vertx));
         if(config.containsKey("slackHook")){
-            return Optional.of(new HookSlack(vertx, config));
-        }else{
-            return Optional.empty();
+            hooks.add(new HookSlack(vertx, config));
         }
+        return hooks;
     }
 }

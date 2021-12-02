@@ -113,14 +113,17 @@ public class MavenServiceResolver extends AbstactServiceResolver {
     }
 
     private void downloadFile(int index, String identifier, String path, JsonArray repositories, List<HttpClient> clients, Handler<AsyncResult<String>> handler, HttpClient client, String uri, String credential) {
-        log.info("Downloading service "+ identifier);
         HttpClientRequest req = client.get(uri, resp -> {
+            resp.exceptionHandler(e->{
+                log.error("Exception while downloading service: "+uri,e);
+            });
             if (resp.statusCode() == 200) {
                 resp.bodyHandler(buffer -> {
                     if (uri.endsWith(MAVEN_METADATA_XML)) {
                         try {
                             final String snapshotUri = getSnapshotPath(buffer.toString(),
                                 uri.replaceFirst(MAVEN_METADATA_XML, ""), identifier);
+                            log.info("Downloading service "+ identifier+ "->"+snapshotUri);
                             downloadFile(index, identifier, path, repositories, clients, handler,
                                 client, snapshotUri, credential);
                         } catch (Exception e) {
@@ -151,6 +154,9 @@ public class MavenServiceResolver extends AbstactServiceResolver {
         if (credential != null) {
             req.putHeader("Authorization", "Basic " + credential);
         }
+        req.exceptionHandler(e->{
+            log.error("Exception while downloading service: "+uri,e);
+        });
         req.end();
     }
 
