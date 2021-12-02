@@ -20,7 +20,7 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.LocalMap;
 
 public class ModuleDeployerDefault implements ModuleDeployer {
-    private final Optional<Hook> hook;
+    private final Hook hook;
     private final String assetPath;
     private final boolean cluster;
     private final String node;
@@ -85,9 +85,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 if (res.succeeded()) {
                     log.info("Custom deployment succeed :" + name);
                     future.complete();
-                    if(hook.isPresent()){
-                        hook.get().emit(service, Hook.HookEvents.Deployed);
-                    }
+                    hook.emit(service, Hook.HookEvents.Deployed);
                 } else {
                     log.error("Custom deployment failed :" + name, res.cause());
                     future.fail(res.cause());
@@ -101,9 +99,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 log.info("Mod has been deployed successfully : " + name);
                 addAppVersion(name, ar.result());
                 future.complete();
-                if(hook.isPresent()){
-                    hook.get().emit(service, Hook.HookEvents.Deployed);
-                }
+                hook.emit(service, Hook.HookEvents.Deployed);
             } else {
                 log.error("Error deploying required service  : " + name, ar.cause());
                 future.fail(ar.cause());
@@ -125,9 +121,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 if (res.succeeded()) {
                     log.info("Custom undeployment succeed :" + name);
                     future.complete();
-                    if(hook.isPresent()){
-                        hook.get().emit(service, Hook.HookEvents.Undeployed);
-                    }
+                    hook.emit(service, Hook.HookEvents.Undeployed);
                 } else {
                     log.error("Custom undeployment failed :" + name, res.cause());
                     future.fail(res.cause());
@@ -143,9 +137,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                     removeAppVersion(name);
                     log.info("Mod has been undeployed successfully : " + name);
                     future.complete();
-                    if(hook.isPresent()){
-                        hook.get().emit(service, Hook.HookEvents.Undeployed);
-                    }
+                    hook.emit(service, Hook.HookEvents.Undeployed);
                 } else {
                     log.error("Error undeploying required service  : " + name, ar.cause());
                     future.fail(ar.cause());
