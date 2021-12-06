@@ -53,12 +53,18 @@ public class ConfigProviderListenerAssets implements ConfigProviderListener {
                 }
             }
         }
-//        log.info("Redeploy check: "+redeployAssets+"|"+deployed.keySet()+"|"+toDeploy.keySet()+"|"+toUndeploy.keySet());
     }
 
     @Override
     public void afterConfigChange(ConfigChangeEvent event, boolean success) {
         if(success) {
+            //remove all front service undeployed (must be before if service is undeployed then deployed)
+            for (final JsonObject service : event.getServicesToUndeploy()) {
+                if (CustomDeployerFront.canDeployService(service)) {
+                    final String name = service.getString("name");
+                    deployed.remove(name);
+                }
+            }
             //add all front service deployed to a map
             for (final JsonObject service : event.getServicesToDeploy()) {
                 if (CustomDeployerFront.canDeployService(service)) {
@@ -70,13 +76,6 @@ public class ConfigProviderListenerAssets implements ConfigProviderListener {
                 if (CustomDeployerFront.canDeployService(service)) {
                     final String name = service.getString("name");
                     deployed.put(name, service);
-                }
-            }
-            //remove all front service undeployed
-            for (final JsonObject service : event.getServicesToUndeploy()) {
-                if (CustomDeployerFront.canDeployService(service)) {
-                    final String name = service.getString("name");
-                    deployed.remove(name);
                 }
             }
         }

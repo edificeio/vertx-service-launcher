@@ -13,6 +13,7 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 import java.io.File;
+import java.nio.file.NoSuchFileException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -209,11 +210,19 @@ public class CustomDeployerFront implements CustomDeployer {
             // delete output and service path
             vertx.fileSystem().deleteRecursive(outputPath, true, res1 -> {
                 if (res1.failed()) {
-                    log.warn("Could not delete :"+outputPath, res1.cause());
+                    if(res1.cause().getCause() != null && res1.cause().getCause() instanceof NoSuchFileException){
+                        log.warn("Could not delete :"+outputPath+ " -> " + res1.cause().getMessage());
+                    }else{
+                        log.warn("Could not delete :"+outputPath, res1.cause());
+                    }
                 }
                 vertx.fileSystem().deleteRecursive(servicePath, true, res2 -> {
                     if (res2.failed()) {
-                        log.warn("Could not delete :"+servicePath, res2.cause());
+                        if(res2.cause().getCause() != null && res2.cause().getCause() instanceof NoSuchFileException){
+                            log.warn("Could not delete :"+servicePath+ " -> " + res2.cause().getMessage());
+                        }else{
+                            log.warn("Could not delete :"+servicePath, res2.cause());
+                        }
                     }
                     result.handle(new DefaultAsyncResult<>((Void)null));
                 });
