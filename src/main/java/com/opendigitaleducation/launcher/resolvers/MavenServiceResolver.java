@@ -82,7 +82,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             path += MAVEN_METADATA_XML;
             downloadService(0, identifier, path, snapshotsRepositories, snapshotsClients, handler);
         } else {
-            final String ext = ExtensionRegistry.getExtensionForId(identifier);
+            final String ext = getExtensionForId(identifier);
             path += id[1] + "-" + id[2] + ext;
             downloadService(0, identifier, path, releasesRepositories, releasesClients, handler);
         }
@@ -131,7 +131,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
                             handleAsyncError(e, handler);
                         }
                     } else {
-                        final String ext = ExtensionRegistry.getExtensionForId(identifier);
+                        final String ext = getExtensionForId(identifier);
                         final String destFile = servicesPath + File.separator + identifier + ext;
                         vertx.fileSystem().writeFile(destFile, buffer, ar -> {
                             if (ar.succeeded()) {
@@ -198,7 +198,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
         String timestamp = xpath.evaluate("//timestamp", root);
         String buildNumber = xpath.evaluate("//buildNumber", root);
         final String [] id = identifier.split("~");
-        final String ext = ExtensionRegistry.getExtensionForId(identifier);
+        final String ext = getExtensionForId(identifier);
         return uri + id[1] + "-" + id[2].replaceFirst("-SNAPSHOT", "") + "-" + timestamp + "-" + buildNumber + ext ;
     }
 

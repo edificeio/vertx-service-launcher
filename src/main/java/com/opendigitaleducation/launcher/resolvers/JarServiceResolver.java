@@ -18,7 +18,7 @@ public class JarServiceResolver extends AbstactServiceResolver {
     }
 
     protected String getServicePath(String id) {
-         return servicesPath + File.separator + id + ExtensionRegistry.getExtensionForId(id);
+         return servicesPath + File.separator + id + getExtensionForId(id);
     }
 
     @Override
