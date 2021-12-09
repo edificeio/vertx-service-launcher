@@ -6,6 +6,7 @@ import io.vertx.core.Vertx;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.ServiceLoader;
 
 import static com.opendigitaleducation.launcher.utils.DefaultAsyncResult.handleAsyncError;
@@ -20,6 +21,15 @@ public class ServiceResolverFactory {
         for(ServiceResolver resolver : resolvers) {
             resolver.init(vertx, servicesPath);
             serviceResolvers.add(resolver);
+        }
+    }
+
+    public void init(final Vertx vertx, final String servicesPath, final String forceExtension) {
+        init(vertx, servicesPath);
+        for(final ServiceResolver resolver : serviceResolvers) {
+            if(resolver instanceof  AbstactServiceResolver){
+                ((AbstactServiceResolver) resolver).setForceExtension(Optional.of(forceExtension));
+            }
         }
     }
 
