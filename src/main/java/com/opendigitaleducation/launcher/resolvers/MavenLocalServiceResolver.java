@@ -17,7 +17,7 @@ public class MavenLocalServiceResolver extends AbstactServiceResolver {
             handleAsyncError(new NotFoundServiceException("invalid.identifier"), handler);
             return;
         }
-        final String ext = ExtensionRegistry.getExtensionForId(identifier);
+        final String ext = getExtensionForId(identifier);
         final String path = System.getProperty("user.home") + File.separator + ".m2" + File.separator +
             "repository" + File.separator + id[0].replaceAll("\\.", File.separator) + File.separator + id[1] +
             File.separator + id[2] + File.separator + id[1] + "-" + id[2] + ext;

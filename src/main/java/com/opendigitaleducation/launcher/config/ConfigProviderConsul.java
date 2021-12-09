@@ -5,8 +5,14 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collector;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -24,7 +30,7 @@ public class ConfigProviderConsul implements ConfigProvider {
     static DateFormat format = new SimpleDateFormat("yyyyMMdd-HHmm");
     static String CONSUL_ENABLE = "consulEnabled";
     static String CONSUL_MODS_CONFIG = "consulMods";
-    private static int countDeploy = 0;
+    public static int countDeploy = 0;
     private static final Logger log = LoggerFactory.getLogger(ConfigProviderConsul.class);
     private Vertx vertx;
     private int pullEveryMs;
@@ -36,6 +42,7 @@ public class ConfigProviderConsul implements ConfigProvider {
     private JsonObject originalConfig;
     private Optional<String> consulToken = Optional.empty();
     private ConfigChangeEventConsul lastEvent = new ConfigChangeEventConsul();
+    private ConfigBuilder configBuilder;
     private final List<Handler<ConfigChangeEvent>> handlers = new ArrayList<>();
     private final List<ConfigProviderListener> listeners = new ArrayList<>();
 
@@ -126,13 +133,15 @@ public class ConfigProviderConsul implements ConfigProvider {
             }
             req.end();
         }
-        CompositeFuture.all(futures).setHandler(res -> {
+        CompositeFuture.all(futures).compose(res->{
+            return configBuilder.build(res.result().list());
+        }).onComplete(res -> {
             if (res.succeeded()) {
                 countDeploy++;
-                final ConfigChangeEventConsul event = new ConfigChangeEventConsul(originalConfig, res.result().list(),
-                        lastEvent);
+                final ConfigChangeEventConsul event = new ConfigChangeEventConsul(originalConfig, res.result(), lastEvent);
                 doPush(event);
             } else {
+                log.error("Failed to build config:", res.cause());
                 initTimer();
             }
         });
@@ -172,9 +181,13 @@ public class ConfigProviderConsul implements ConfigProvider {
 
     @Override
     public ConfigProvider start(Vertx vertx, JsonObject config) {
+        final String depPath = FileUtils.absolutePath(System.getProperty("vertx.deployments.path"));
+        final String servicesPath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
+        final String safeDepPath = depPath != null && !depPath.isEmpty()? depPath:servicesPath;
         this.vertx = vertx;
         originalConfig = config;
         pullEveryMs = config.getInteger("pullEverySeconds", 1) * 1000;
+        configBuilder = config.getBoolean("use-template", true)?ConfigBuilder.fromTemplate(vertx, safeDepPath): ConfigBuilder.fromJsons();
         // url mods
         Object urlMods = config.getValue(CONSUL_MODS_CONFIG);
         if (!initModsUrls(urlMods)) {
@@ -208,13 +221,11 @@ public class ConfigProviderConsul implements ConfigProvider {
     }
 
     private static class ConfigChangeEventConsul extends ConfigChangeEvent {
-        private Map<String, Integer> indexesByKey = new HashMap<>();
-        private Map<String, String> valueByKey = new HashMap<>();
-        private Map<String, JsonObject> lazyValueAsJsonByKey = new HashMap<>();
+        private List<ConfigBuilder.ServiceConfig> orderedServices = new ArrayList<>();
+        private Map<String, ConfigBuilder.ServiceConfig> modelByKey = new HashMap<>();
         private List<JsonObject> toRestart = new ArrayList<>();
         private List<JsonObject> toDeploy = new ArrayList<>();
         private List<JsonObject> toUndeploy = new ArrayList<>();
-        private List<String> keys = new ArrayList<>();
         private final JsonObject originalConfig;
 
         ConfigChangeEventConsul() {
@@ -241,103 +252,59 @@ public class ConfigProviderConsul implements ConfigProvider {
             }
         }
 
-        ConfigChangeEventConsul(JsonObject originalConfig, List<JsonArray> services, ConfigChangeEventConsul previous) {
+        ConfigChangeEventConsul(JsonObject originalConfig, List<ConfigBuilder.ServiceConfig> servicesList, ConfigChangeEventConsul previous) {
             this.originalConfig = new JsonObject(originalConfig.getMap());
-            // merge keys
-            final Map<String, JsonObject> servicesMerged = new HashMap<>();
-            for (JsonArray serviceListArray : services) {
-                for (Object serviceObject : serviceListArray) {
-                    final JsonObject serviceJson = (JsonObject) serviceObject;
-                    final String[] keys = serviceJson.getString("Key", "").split("/");
-                    final String key = keys[keys.length - 1];
-                    if (servicesMerged.containsKey(key) && countDeploy == 1) {
-                        log.info("Overriding application : " + key);
-                    }
-                    servicesMerged.put(key, serviceJson);
-                }
-            }
-            // sort keys
-            final List<JsonObject> servicesList = servicesMerged.entrySet().stream().sorted((a, b) -> {
-                final String keya = a.getKey();
-                final String keyb = b.getKey();
-                return keya.compareTo(keyb);
-            }).map(e -> e.getValue()).collect(Collectors.toList());
+            this.orderedServices = servicesList;
             // compute changes
-            for (final JsonObject jsonService : servicesList) {
-                final int modifiedIndex = jsonService.getInteger("ModifyIndex");
-                final String key = jsonService.getString("Key");
-                final String value = jsonService.getString("Value");
-                if (value == null)
-                    continue;
-                indexesByKey.put(key, modifiedIndex);
-                valueByKey.put(key, value);
-                keys.add(key);
-                if (previous.keyExists(key)) {
-                    if (previous.valueHasChanges(key, modifiedIndex)) {
-                        if (getFullQualifiedName(key).equals(previous.getFullQualifiedName(key))) {
+            for (final ConfigBuilder.ServiceConfig jsonService : servicesList) {
+                modelByKey.put(jsonService.getKey(), jsonService);
+                if (previous.keyExists(jsonService)) {
+                    final ConfigBuilder.ServiceConfig previousService = previous.getService(jsonService);
+                    if (previous.valueHasChanges(jsonService)) {
+                        if (jsonService.getFullQualifiedName().equals(previousService.getFullQualifiedName())) {
                             // restart module
-                            toRestart.add(getJsonValue(key));
+                            toRestart.add(jsonService.getConfig());
                         } else {
                             // redploy module
-                            toDeploy.add(getJsonValue(key));
-                            toUndeploy.add(previous.getJsonValue(key));
+                            toDeploy.add(jsonService.getConfig());
+                            toUndeploy.add(jsonService.getConfig());
                         }
                     } else {
                         // DO NOTHING IF NOTHING HAS CHANGED
                     }
                 } else {
-                    toDeploy.add(getJsonValue(key));
+                    toDeploy.add(jsonService.getConfig());
                 }
             }
-            //
-            for (String previousKey : previous.getSortedKeys()) {
-                if (keys.contains(previousKey)) {
+            //get services to undeploy
+            for (final String previousKey : previous.getSortedKeys()) {
+                if (modelByKey.containsKey(previousKey)) {
                     // DO NOTHING
                 } else {
                     // remove module
-                    toUndeploy.add(previous.getJsonValue(previousKey));
+                    toUndeploy.add(previous.getService(previousKey).getConfig());
                 }
             }
         }
 
         public List<String> getSortedKeys() {
-            return keys;
+            return orderedServices.stream().map(e->e.getKey()).collect(Collectors.toList());
         }
 
-        public JsonObject getJsonValue(String key) {
-            if (lazyValueAsJsonByKey.containsKey(key)) {
-                return lazyValueAsJsonByKey.get(key);
-            } else {
-                if (valueByKey.containsKey(key)) {
-                    if (valueByKey.get(key) == null) {
-                        System.out.println();
-                    }
-                    final String decoded = new String(Base64.getDecoder().decode(valueByKey.get(key)));
-                    lazyValueAsJsonByKey.put(key, new JsonObject(decoded));
-                    return lazyValueAsJsonByKey.get(key);
-                } else {
-                    log.warn("Could not found jsonConfig for key : " + key);
-                    return new JsonObject();
-                }
-            }
+        public ConfigBuilder.ServiceConfig getService(final String key) {
+            return modelByKey.get(key);
         }
 
-        public String getFullQualifiedName(String key) {
-            final JsonObject json = getJsonValue(key);
-            final String name = json.getString("name");
-            if (name == null) {
-                log.warn("Could not found FullQualifiedName for key : " + key + " (" + json.encode() + ")");
-                return "";
-            }
-            return name;
+        public ConfigBuilder.ServiceConfig getService(final ConfigBuilder.ServiceConfig key) {
+            return modelByKey.get(key.getKey());
         }
 
-        public boolean keyExists(String key) {
-            return keys.contains(key);
+        public boolean keyExists(final ConfigBuilder.ServiceConfig key) {
+            return modelByKey.containsKey(key.getKey());
         }
 
-        public boolean valueHasChanges(String key, int newModifiedIndex) {
-            return indexesByKey.get(key).intValue() != newModifiedIndex;
+        public boolean valueHasChanges(final ConfigBuilder.ServiceConfig other) {
+            return modelByKey.get(other.getKey()).hasChanged(other);
         }
 
         @Override
@@ -358,8 +325,8 @@ public class ConfigProviderConsul implements ConfigProvider {
         @Override
         public JsonObject getDump() {
             final JsonArray services = new JsonArray();
-            for (final String key : keys) {
-                services.add(getJsonValue(key));
+            for (final ConfigBuilder.ServiceConfig service : orderedServices) {
+                services.add(service.getConfig());
             }
             return originalConfig.put("services", services);
         }
