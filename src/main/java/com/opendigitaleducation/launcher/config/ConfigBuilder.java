@@ -58,8 +58,8 @@ public abstract class ConfigBuilder {
         return new ConfigBuilderJson();
     }
 
-    static ConfigBuilder fromTemplate(final Vertx vertx, final String servicePath){
-        return new ConfigBuilderTemplate(vertx, servicePath);
+    static ConfigBuilder fromTemplate(final Vertx vertx, final String servicePath, final JsonObject config){
+        return new ConfigBuilderTemplate(vertx, servicePath, config);
     }
 
     interface ServiceConfig{
