@@ -3,12 +3,7 @@ package com.opendigitaleducation.launcher.config;
 import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -39,6 +34,7 @@ public class ConfigProviderConsul implements ConfigProvider {
     private HttpClient client;
     private String nodeName;
     private JsonObject originalConfig;
+    private Optional<String> consulToken = Optional.empty();
     private ConfigChangeEventConsul lastEvent = new ConfigChangeEventConsul();
     private final List<Handler<ConfigChangeEvent>> handlers = new ArrayList<>();
     private final List<ConfigProviderListener> listeners = new ArrayList<>();
@@ -81,6 +77,9 @@ public class ConfigProviderConsul implements ConfigProvider {
                 // do nothing
                 log.info(String.format("Node %s is synced with consul (deployed=%s, undeployed=%s, restart=%s)", nodeName, event.getServicesToDeploy().size(), event.getServicesToUndeploy().size(), event.getServicesToRestart().size()));
             });
+            if(consulToken.isPresent()){
+                req.putHeader("X-Consul-Token", consulToken.get());
+            }
             req.exceptionHandler(err -> {
                 log.error("Fail to send state for node: " + nodeName, err);
             });
@@ -109,7 +108,7 @@ public class ConfigProviderConsul implements ConfigProvider {
         for (final String url : urlMods) {
             final Future<JsonArray> future = Future.future();
             futures.add(future);
-            client.getAbs(url + "?recurse", res -> {
+            final HttpClientRequest req = client.getAbs(url + "?recurse", res -> {
                 res.bodyHandler(body -> {
                     final JsonArray services = new JsonArray(body);
                     future.complete(services);
@@ -121,7 +120,11 @@ public class ConfigProviderConsul implements ConfigProvider {
             }).exceptionHandler(exc -> {
                 log.error("Failed to load consul config (connection) : " + url, exc);
                 future.fail(exc);
-            }).end();
+            });
+            if(consulToken.isPresent()){
+                req.putHeader("X-Consul-Token", consulToken.get());
+            }
+            req.end();
         }
         CompositeFuture.all(futures).setHandler(res -> {
             if (res.succeeded()) {
@@ -189,7 +192,11 @@ public class ConfigProviderConsul implements ConfigProvider {
         }
         //
         nodeName = config.getString("node", config.getString("consuleNode", "unknown"));
-        client = vertx.createHttpClient(new HttpClientOptions().setKeepAlive(false));
+        final HttpClientOptions options = new HttpClientOptions().setKeepAlive(config.getBoolean("consulKeepAlive", false));
+        if(config.containsKey("consulToken")){
+            consulToken = Optional.ofNullable(config.getString("consulToken"));
+        }
+        client = vertx.createHttpClient(options);
         reload();
         return this;
     }
