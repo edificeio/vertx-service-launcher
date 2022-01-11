@@ -33,11 +33,11 @@ import static com.opendigitaleducation.launcher.utils.DefaultAsyncResult.handleA
 public class MavenServiceResolver extends AbstactServiceResolver {
 
     public static final String MAVEN_METADATA_XML = "maven-metadata.xml";
-    private JsonArray releasesRepositories;
-    private JsonArray snapshotsRepositories;
-    private List<HttpClient> releasesClients;
-    private List<HttpClient> snapshotsClients;
-    private boolean shouldInitExtraRepo = true;
+    protected JsonArray releasesRepositories;
+    protected JsonArray snapshotsRepositories;
+    protected List<HttpClient> releasesClients;
+    protected List<HttpClient> snapshotsClients;
+    protected boolean shouldInitExtraRepo = true;
     @Override
     public void init(Vertx vertx, String servicesPath) {
         super.init(vertx, servicesPath);
@@ -60,8 +60,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
         snapshotsClients = new ArrayList<>();
     }
 
-    @Override
-    public void resolve(String identifier, Handler<AsyncResult<String>> handler) {
+    protected void initExtraRepoIfNeeded(){
         if(shouldInitExtraRepo){
             //extra repo
             final JsonObject config =  vertx.getOrCreateContext().config();
@@ -72,6 +71,11 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             }
             shouldInitExtraRepo=false;
         }
+    }
+
+    @Override
+    public void resolve(String identifier, Handler<AsyncResult<String>> handler) {
+        initExtraRepoIfNeeded();
         final String [] id = identifier.split("~");
         if (id.length != 3) {
             handleAsyncError(new NotFoundServiceException("invalid.identifier"), handler);
@@ -115,7 +119,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
     private void downloadFile(int index, String identifier, String path, JsonArray repositories, List<HttpClient> clients, Handler<AsyncResult<String>> handler, HttpClient client, String uri, String credential) {
         HttpClientRequest req = client.get(uri, resp -> {
             resp.exceptionHandler(e->{
-                log.error("Exception while downloading service: "+uri,e);
+                log.error("Response Exception while downloading service: "+uri,e);
             });
             if (resp.statusCode() == 200) {
                 resp.bodyHandler(buffer -> {
@@ -155,12 +159,12 @@ public class MavenServiceResolver extends AbstactServiceResolver {
             req.putHeader("Authorization", "Basic " + credential);
         }
         req.exceptionHandler(e->{
-            log.error("Exception while downloading service: "+uri,e);
+            log.error("Request Exception while downloading service: "+uri,e);
         });
         req.end();
     }
 
-    private HttpClient createClient(String repository, List<HttpClient> clients) throws URISyntaxException {
+    protected HttpClient createClient(String repository, List<HttpClient> clients) throws URISyntaxException {
         final URI uri = new URI(repository);
         final boolean ssl = "https".equals(uri.getScheme());
         final HttpClientOptions options = new HttpClientOptions()
@@ -187,7 +191,7 @@ public class MavenServiceResolver extends AbstactServiceResolver {
         }
     }
 
-    private String getSnapshotPath(String content, String uri, String identifier)
+    protected String getSnapshotPath(String content, String uri, String identifier)
         throws ParserConfigurationException, IOException, SAXException, XPathExpressionException {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = factory.newDocumentBuilder();

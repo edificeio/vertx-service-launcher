@@ -2,14 +2,15 @@ package com.opendigitaleducation.launcher.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import io.vertx.core.Handler;
 import io.vertx.core.json.JsonObject;
 
 public abstract class ConfigChangeEvent {
     private boolean forceClean = false;
-    private List<Handler<Boolean>> endHandlers = new ArrayList<>();
-    private List<Handler<Void>> emptyHandlers = new ArrayList<>();
+    private final List<Handler<Boolean>> endHandlers = new ArrayList<>();
+    private final List<Handler<Void>> emptyHandlers = new ArrayList<>();
 
     public boolean isForceClean() {
         return forceClean;

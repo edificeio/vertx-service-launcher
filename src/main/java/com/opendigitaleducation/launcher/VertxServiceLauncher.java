@@ -3,8 +3,10 @@ package com.opendigitaleducation.launcher;
 import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
 import com.opendigitaleducation.launcher.config.ConfigProviderListenerAssets;
+import com.opendigitaleducation.launcher.config.ConfigProviderListenerConsulCDN;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
 import com.opendigitaleducation.launcher.listeners.ArtefactListener;
+import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.logging.Logger;
@@ -56,6 +58,10 @@ public class VertxServiceLauncher extends AbstractVerticle {
         configProvider = ConfigProvider.create(config()).start(vertx, config());
         if(config().getBoolean("redeploy-assets-onclean", true)) {
             configProvider.addListener(new ConfigProviderListenerAssets());
+        }
+        if(config().getBoolean("consulCdnEnabled", false)) {
+            final String servicesPath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
+            configProvider.addListener(new ConfigProviderListenerConsulCDN(config(), vertx, servicesPath));
         }
         configProvider.onConfigChange(resConfig -> {
             onChangeEvent(resConfig, clean || resConfig.isForceClean());

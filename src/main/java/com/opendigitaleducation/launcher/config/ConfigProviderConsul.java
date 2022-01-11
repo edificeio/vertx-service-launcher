@@ -258,22 +258,24 @@ public class ConfigProviderConsul implements ConfigProvider {
             // compute changes
             for (final ConfigBuilder.ServiceConfig jsonService : servicesList) {
                 modelByKey.put(jsonService.getKey(), jsonService);
+                final JsonObject serviceConfig = jsonService.getConfig();
+                serviceConfig.put("consulKey", jsonService.getKey());
                 if (previous.keyExists(jsonService)) {
                     final ConfigBuilder.ServiceConfig previousService = previous.getService(jsonService);
                     if (previous.valueHasChanges(jsonService)) {
                         if (jsonService.getFullQualifiedName().equals(previousService.getFullQualifiedName())) {
                             // restart module
-                            toRestart.add(jsonService.getConfig());
+                            toRestart.add(serviceConfig);
                         } else {
                             // redploy module
-                            toDeploy.add(jsonService.getConfig());
-                            toUndeploy.add(jsonService.getConfig());
+                            toDeploy.add(serviceConfig);
+                            toUndeploy.add(serviceConfig);
                         }
                     } else {
                         // DO NOTHING IF NOTHING HAS CHANGED
                     }
                 } else {
-                    toDeploy.add(jsonService.getConfig());
+                    toDeploy.add(serviceConfig);
                 }
             }
             //get services to undeploy

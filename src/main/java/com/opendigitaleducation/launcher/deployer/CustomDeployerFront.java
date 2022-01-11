@@ -21,10 +21,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class CustomDeployerFront implements CustomDeployer {
+    public static final String ASSETS_TYPES = "assets";
+    public static final String THEME_TYPES = "theme";
+    public static final String THEMES_TYPES = "themes";
+    public static final String JS_TYPES = "js";
     static Logger log = LoggerFactory.getLogger(CustomDeployerFront.class);
     private static final String MODSINFO_MAP_NAME= "modsInfoMap";
     private static final String MODSINFO_CHANGED_EVENT_NAME= "modsInfoChanged";
-    private static final String ASSETS_TYPES = "assets";
     private final Vertx vertx;
     private final String servicesPath;
     private final String assetPath;
@@ -34,9 +37,9 @@ public class CustomDeployerFront implements CustomDeployer {
 
     static final Map<String, String> outputForTypes = new HashMap<>();
     {
-        outputForTypes.put("theme", "themes");
-        outputForTypes.put("themes", "themes");
-        outputForTypes.put("js", "js");
+        outputForTypes.put(THEME_TYPES, "themes");
+        outputForTypes.put(THEMES_TYPES, "themes");
+        outputForTypes.put(JS_TYPES, "js");
         outputForTypes.put(ASSETS_TYPES, "assets");
     }
 
@@ -67,6 +70,23 @@ public class CustomDeployerFront implements CustomDeployer {
     protected String getServicePath(JsonObject service) throws Exception {
         final String id = ModuleDeployer.getServiceId(service);
         return servicesPath + File.separator + id + File.separator;
+    }
+
+    public static String getDistDir(final JsonObject service){
+        final String dist = service.getString("dist-dir", "dist");
+        return dist;
+    }
+
+    public static String getAssetsDir(){
+        return "assets";
+    }
+
+    public static String getBaseJS(){
+        return "assets/js";
+    }
+
+    public static String getBaseThemes(){
+        return "assets/themes";
     }
 
     protected String getDistPath(JsonObject service) throws Exception {

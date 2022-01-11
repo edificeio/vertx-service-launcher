@@ -91,4 +91,16 @@ public interface ModuleDeployer {
         }
         return id;
     }
+
+    static String getServiceName(JsonObject service) throws Exception {
+        final String id = service.getString("name");
+        if (id == null) {
+            throw new Exception("[getServiceId] Invalid identifier : " + id);
+        }
+        String[] artifact = id.split("~");
+        if (artifact.length != 3) {
+            throw new Exception("[getServiceId] Invalid artifact : " + id);
+        }
+        return artifact[1];
+    }
 }
