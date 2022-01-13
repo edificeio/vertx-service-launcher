@@ -36,8 +36,8 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
     ConfigBuilderTemplate(final Vertx vertx, final String servicePath, final JsonObject config){
         this.vertx = vertx;
         this.servicePath = servicePath;
-        this.dumpTemplate = config.getBoolean("dump-template", false);
-        this.dumpTemplateOnError = config.getBoolean("dump-template-onerror", true);
+        this.dumpTemplate = config.getBoolean("dumpTemplate", false);
+        this.dumpTemplateOnError = config.getBoolean("dumpTemplateOnerror", true);
         this.serviceResolverFatJar = new ServiceResolverFactory();
         this.serviceResolverTarGz = new ServiceResolverFactory();
         this.serviceResolverFatJar.init(vertx, servicePath);
@@ -95,7 +95,7 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
                     return (JsonObject) e;
                 }).sorted((a, b) -> {
                     final Double prioA = a.getDouble("priority", DEFAULT_PRIORITY);
-                    final Double prioB = a.getDouble("priority", DEFAULT_PRIORITY);
+                    final Double prioB = b.getDouble("priority", DEFAULT_PRIORITY);
                     return prioA.compareTo(prioB);
                 }).map(e -> {
                     return new ServiceConfigImpl(e.getString("name", ""), e);
@@ -112,7 +112,12 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
                     final Date date = new Date();
                     final String dateFormat = format.format(date);
                     final String fileName = servicePath+File.separator+".."+File.separator+"dump"+File.separator+dateFormat+"-error.json";
-                    vertx.fileSystem().writeFile(fileName, Buffer.buffer(template), ee->{});
+                    log.warn("Dumping config file in error to: "+ fileName);
+                    vertx.fileSystem().writeFile(fileName, Buffer.buffer(template), ee->{
+                        if(ee.failed()){
+                            log.error("Failed to dump json file: "+fileName, ee);
+                        }
+                    });
                 }
                 promiseTpl.fail(e);
             }
@@ -168,30 +173,36 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
     protected Future<String> resolve(final String identifier, final String id){
         final Promise<String> promise = Promise.promise();
         final String destZip = this.servicePath + File.separator + identifier + File.separator;
-        serviceResolverFatJar.resolve(identifier, jar->{
-            if (jar.succeeded()) {
-                ZipUtils.unzipJar(vertx, jar.result(), destZip, res -> {
-                    if(res.succeeded()){
-                        promise.complete(destZip);
-                    }else{
-                        promise.fail(res.cause());
-                    }
-                });
-            } else {
-                serviceResolverTarGz.resolve(identifier, tar -> {
-                    if(tar.succeeded()){
-                        ZipUtils.unzip(vertx, tar.result(), destZip, res -> {
-                            if(res.succeeded()){
-                                promise.complete(destZip);
-                            }else{
-                                promise.fail(res.cause());
-                            }
-                        });
-                    }else{
-                        promise.fail("Could not found (JAR/TAR): " + identifier);
-                    }
-                });
+        vertx.fileSystem().exists(destZip, existsRes -> {
+            if(existsRes.succeeded() && existsRes.result()){
+                promise.complete(destZip);
+                return;
             }
+            serviceResolverFatJar.resolve(identifier, jar->{
+                if (jar.succeeded()) {
+                    ZipUtils.unzipJar(vertx, jar.result(), destZip, res -> {
+                        if(res.succeeded()){
+                            promise.complete(destZip);
+                        }else{
+                            promise.fail(res.cause());
+                        }
+                    });
+                } else {
+                    serviceResolverTarGz.resolve(identifier, tar -> {
+                        if(tar.succeeded()){
+                            ZipUtils.unzip(vertx, tar.result(), destZip, res -> {
+                                if(res.succeeded()){
+                                    promise.complete(destZip);
+                                }else{
+                                    promise.fail(res.cause());
+                                }
+                            });
+                        }else{
+                            promise.fail("Could not found (JAR/TAR): " + identifier);
+                        }
+                    });
+                }
+            });
         });
         return promise.future();
     }
@@ -268,7 +279,17 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
 
         @Override
         public boolean hasChanged(ServiceConfig previous) {
-            return !((ServiceConfigImpl)previous).config.toString().equals(config.toString());
+            final JsonObject prev = ((ServiceConfigImpl)previous).config;
+            final JsonObject cur = config;
+            final JsonObject curConf = cur.getJsonObject("config", new JsonObject());
+            final JsonObject prevConf = prev.getJsonObject("config", new JsonObject());
+            if(curConf.containsKey("cwd") && !prevConf.containsKey("cwd")){
+                prevConf.put("cwd", curConf.getString("cwd"));
+            }
+            if(curConf.containsKey("assets-path") && !prevConf.containsKey("assets-path")){
+                prevConf.put("assets-path", curConf.getString("assets-path"));
+            }
+            return !cur.toString().equals(prev.toString());
         }
 
     }

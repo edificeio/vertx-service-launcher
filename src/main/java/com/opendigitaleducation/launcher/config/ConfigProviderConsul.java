@@ -185,7 +185,7 @@ public class ConfigProviderConsul implements ConfigProvider {
         this.vertx = vertx;
         originalConfig = config;
         pullEveryMs = config.getInteger("pullEverySeconds", 1) * 1000;
-        configBuilder = config.getBoolean("use-template", true)?ConfigBuilder.fromTemplate(vertx, servicesPath, config): ConfigBuilder.fromJsons();
+        configBuilder = config.getBoolean("useTemplate", true)?ConfigBuilder.fromTemplate(vertx, servicesPath, config): ConfigBuilder.fromJsons();
         // url mods
         Object urlMods = config.getValue(CONSUL_MODS_CONFIG);
         if (!initModsUrls(urlMods)) {
