@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.opendigitaleducation.launcher.utils.DefaultAsyncResult.handleAsyncError;
 
@@ -77,7 +78,12 @@ public class MavenServiceURIResolver extends MavenServiceResolver implements Ser
         return CompositeFuture.any(promises).compose(uriRes->{
             final Promise<String> promise = Promise.promise();
             if(uriRes.succeeded()){
-                promise.complete(uriRes.list().get(0).toString());
+                final List<Object> list = uriRes.list().stream().filter(e -> e != null).collect(Collectors.toList());
+                if(list.isEmpty()){
+                    promise.fail("Could not found uri for identifier: "+identifier);
+                }else{
+                    promise.complete(list.get(0).toString());
+                }
             }else{
                 promise.fail(uriRes.cause());
             }

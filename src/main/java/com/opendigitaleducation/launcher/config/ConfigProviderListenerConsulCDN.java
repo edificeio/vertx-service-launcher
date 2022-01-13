@@ -23,14 +23,12 @@ import java.util.*;
 
 public class ConfigProviderListenerConsulCDN implements  ConfigProviderListener {
     static Logger log = LoggerFactory.getLogger(ConfigProviderListenerConsulCDN.class);
-    private final String site;
     private final HttpClient client;
     private final Optional<String> consulToken;
     private final ServiceURIResolver serviceResolver;
     private final Set<String> consulUrl = new HashSet<>();
 
     public ConfigProviderListenerConsulCDN(final JsonObject config, final Vertx vertx, final String servicesPath){
-        this.site = config.getString("consulCdnSite", "site");
         this.serviceResolver = new MavenServiceURIResolver();
         this.serviceResolver.init(vertx, servicesPath);
         final HttpClientOptions options = new HttpClientOptions().setKeepAlive(config.getBoolean("consulKeepAlive", false));
@@ -68,13 +66,12 @@ public class ConfigProviderListenerConsulCDN implements  ConfigProviderListener 
                 final String destDir = service.getString("destDir", getDefaultDestDir(type, service));
                 //to push
                 final JsonObject cdnInfos = new JsonObject();
-                cdnInfos.put("site", this.site);
                 cdnInfos.put("baseDir", baseDir);
                 cdnInfos.put("srcDir", srcDir);
                 cdnInfos.put("destDir", destDir);
                 final String keyDef = StringUtil.padLeftZeros(i.toString(), 5) + "-" + name;
                 final String key = service.getString("consulKey", keyDef);
-                final String fullKey = this.site + "-"+ key;
+                final String fullKey = key;
                 final Promise<Void> promise = Promise.promise();
                 futures.add(promise.future());
                 serviceResolver.resolveURI(id, uriRes -> {
