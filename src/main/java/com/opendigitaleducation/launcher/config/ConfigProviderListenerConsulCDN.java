@@ -69,9 +69,9 @@ public class ConfigProviderListenerConsulCDN implements  ConfigProviderListener 
                 cdnInfos.put("baseDir", baseDir);
                 cdnInfos.put("srcDir", srcDir);
                 cdnInfos.put("destDir", destDir);
-                final String keyDef = StringUtil.padLeftZeros(i.toString(), 5) + "-" + name;
-                final String key = service.getString("consulKey", keyDef);
-                final String fullKey = key;
+                final String keyDef = StringUtil.padLeftZeros(i.toString(), 5) + "-";
+                //final String key = service.getString("consulKey", keyDef);
+                final String fullKey = keyDef + (baseDir + "_" + destDir).replace("/", "_");
                 final Promise<Void> promise = Promise.promise();
                 futures.add(promise.future());
                 serviceResolver.resolveURI(id, uriRes -> {
@@ -81,7 +81,7 @@ public class ConfigProviderListenerConsulCDN implements  ConfigProviderListener 
                             final String filename = FileUtils.getName(uri);
                             final String extension = FileUtils.getExtension(uri).replaceAll(".gz", "");
                             cdnInfos.put("url", uri);
-                            //"extension": "tar" | "jar"
+                            //"extension": "tar" | "jar" | "gz"
                             cdnInfos.put("extension", extension);
                             cdnInfos.put("filename", filename);
                             toPush.put(fullKey, cdnInfos);

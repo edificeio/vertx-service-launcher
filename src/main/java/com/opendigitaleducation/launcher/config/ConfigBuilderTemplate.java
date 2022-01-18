@@ -162,7 +162,14 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
                     if(ar2.succeeded()){
                         promise.complete(ar2.result().toString());
                     }else{
-                        promise.fail(ar2.cause());
+                        final String confPathClean = destZip + File.separator + name.replaceAll("-", "") + File.separator + "conf.j2";
+                        vertx.fileSystem().readFile(confPathClean, ar3 -> {
+                            if(ar3.succeeded()){
+                                promise.complete(ar3.result().toString());
+                            }else{
+                                promise.fail(ar3.cause());
+                            }
+                        });
                     }
                 });
             }
