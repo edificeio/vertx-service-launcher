@@ -69,9 +69,10 @@ public class ConfigProviderListenerConsulCDN implements  ConfigProviderListener 
                 cdnInfos.put("baseDir", baseDir);
                 cdnInfos.put("srcDir", srcDir);
                 cdnInfos.put("destDir", destDir);
-                final String keyDef = StringUtil.padLeftZeros(i.toString(), 5) + "-";
+                //final String keyPrefix = StringUtil.padLeftZeros(i.toString(), 5) + "-";
                 //final String key = service.getString("consulKey", keyDef);
-                final String fullKey = keyDef + (baseDir + "_" + destDir).replace("/", "_");
+                final String keyPrefix = CustomDeployerFront.isAssetsService(service)?"000":"001";
+                final String fullKey = keyPrefix + (baseDir + "_" + destDir).replace("/", "_");
                 final Promise<Void> promise = Promise.promise();
                 futures.add(promise.future());
                 serviceResolver.resolveURI(id, uriRes -> {
