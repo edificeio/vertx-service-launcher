@@ -63,7 +63,7 @@ public class ConfigProviderListenerConsulCDN implements  ConfigProviderListener 
                 final String type = service.getString("type");
                 final String baseDir = service.getString("cdnBaseDir", getDefaultBaseDir(type, name));
                 final String srcDir = service.getString("cdnSrcDir", getDefaultSrcDir(type, service));
-                final String destDir = service.getString("destDir", getDefaultDestDir(type, service));
+                final String destDir = service.getString("cdnDestDir", getDefaultDestDir(type, service));
                 //to push
                 final JsonObject cdnInfos = new JsonObject();
                 cdnInfos.put("baseDir", baseDir);
