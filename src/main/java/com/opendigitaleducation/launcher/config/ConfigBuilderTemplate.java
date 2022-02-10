@@ -187,7 +187,7 @@ public class ConfigBuilderTemplate extends ConfigBuilder {
             }
             serviceResolverFatJar.resolve(identifier, jar->{
                 if (jar.succeeded()) {
-                    ZipUtils.unzipJar(vertx, jar.result(), destZip, res -> {
+                    ZipUtils.unzip(vertx, jar.result(), destZip, res -> {
                         if(res.succeeded()){
                             promise.complete(destZip);
                         }else{

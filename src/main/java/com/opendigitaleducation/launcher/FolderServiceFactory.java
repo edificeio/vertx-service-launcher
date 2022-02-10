@@ -52,7 +52,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
             } else {
                 serviceResolver.resolve(identifier, jar -> {
                     if (jar.succeeded()) {
-                        ZipUtils.unzipJar(vertx, jar.result(), servicePath, res -> {
+                        ZipUtils.unzip(vertx, jar.result(), servicePath, res -> {
                             if (res.succeeded()) {
                                 deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
                             } else {
