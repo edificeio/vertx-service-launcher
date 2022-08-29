@@ -1,8 +1,8 @@
 package com.opendigitaleducation.launcher.listeners;
 
+import com.opendigitaleducation.launcher.VertxServiceLauncher;
 import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
-import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.JsonArray;
@@ -16,7 +16,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
-public class ArtefactListenerNexus implements ArtefactListener{
+public class ArtefactListenerNexus extends ArtefactListenerAbstract<ArtefactListenerNexus.ConfigChangeEventNexus> {
     static String HEADER_KEY = "x-nexus-webhook-signature";
     public static final String NEXUS_ENABLE = "nexusListenerEnabled";
     public static final String NEXUS_PORT = "nexusListenerPort";
@@ -26,38 +26,11 @@ public class ArtefactListenerNexus implements ArtefactListener{
     public static final String NEXUS_HMACKEY = "nexusHmacKey";
     private static final Logger log = LoggerFactory.getLogger(ArtefactListenerNexus.class);
     private HttpServer httpServer;
-    private ConfigChangeEventNexus lastEvent;
-    private final List<Handler<ConfigChangeEvent>> handlers = new ArrayList<>();
-    private final ConfigProvider configProvider;
-    private final Map<String, JsonObject> names = new HashMap<>();
-    private final Set<String> recentlyTriggered = new HashSet<>();
-    public ArtefactListenerNexus(ConfigProvider aConfigProvider){
-        this.configProvider = aConfigProvider;
-        aConfigProvider.onConfigChange(config -> {
-            for(final JsonObject service : config.getServicesToDeploy()){
-                addService(service);
-            }
-            for(final JsonObject service : config.getServicesToRestart()){
-                addService(service);
-            }
-            for(final JsonObject service : config.getServicesToUndeploy()){
-                addService(service);
-            }
-        });
+    public ArtefactListenerNexus(final ConfigProvider aConfigProvider){
+        super(aConfigProvider);
     }
 
-    private void addService(JsonObject service){
-        final String name = service.getString("name", "");
-        if(!name.isEmpty()){
-            final String [] cols = name.split("~");
-            if(cols.length == 3){
-                cols[0] = cols[0].replaceAll("\\.", "/");
-                cols[1] = cols[1].replaceAll("\\.", "/");
-                final String newName = String.join("/", cols);
-                names.put(newName, service);
-            }
-        }
-    }
+
     @Override
     public ArtefactListener start(Vertx vertx, JsonObject config){
         if(httpServer != null){
@@ -103,15 +76,12 @@ public class ArtefactListenerNexus implements ArtefactListener{
                                         //nexus need some delay to return the last artefact when deploy
                                         vertx.setTimer(delaySeconds * 1000, r->{
                                             log.info("Trigger deploy from nexus for module : " + name);
-                                            pushEvent(new ConfigChangeEventNexus(value));
+                                            pushEvent(new ConfigChangeEventNexus(value).setCleanType(VertxServiceLauncher.Clean.All));
                                         });
                                         modules.add(entry.getKey());
                                     }
                                 }
-                                recentlyTriggered.add(name);
-                                vertx.setTimer(seconds * 1000, r -> {
-                                    recentlyTriggered.remove(name);
-                                });
+                                pushServiceAddedRecently(vertx, name, seconds);
                             }
                         }
                         reqH.response().setStatusCode(200).end(new JsonArray(modules).encode());
@@ -128,30 +98,14 @@ public class ArtefactListenerNexus implements ArtefactListener{
         return this;
     }
 
-    public void pushEvent(ConfigChangeEvent event) {
-        for (Handler<ConfigChangeEvent> h : handlers) {
-            h.handle(event);
-        }
-        lastEvent = (ConfigChangeEventNexus) event;
-    }
-
     @Override
     public ArtefactListener stop(){
         httpServer.close();
         return this;
     }
 
-    @Override
-    public ArtefactListener onArtefactChange(Handler<ConfigChangeEvent> handler) {
-        handlers.add(handler);
-        if (lastEvent != null) {
-            handler.handle(lastEvent);
-        }
-        return this;
-    }
 
-
-    private static class ConfigChangeEventNexus extends ConfigChangeEvent {
+    public static class ConfigChangeEventNexus extends ConfigChangeEvent {
         private final List<JsonObject> services = new ArrayList<>();
 
         ConfigChangeEventNexus(JsonObject service) {

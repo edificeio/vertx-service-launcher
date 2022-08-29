@@ -72,6 +72,16 @@ public interface ModuleDeployer {
         return CompositeFuture.all(futures).map(e -> null);
     }
 
+    Future<Void> cleanDir(JsonObject service);
+
+    default Future<Void> cleanAllDir(List<JsonObject> services) {
+        List<Future> futures = new ArrayList<>();
+        for (final JsonObject service : services) {
+            futures.add(cleanDir(service));
+        }
+        return CompositeFuture.all(futures).map(e -> null);
+    }
+
     static String getServiceIdQuietly(JsonObject service) {
         try {
             return getServiceId(service);

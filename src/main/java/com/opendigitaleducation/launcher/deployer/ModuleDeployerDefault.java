@@ -204,6 +204,41 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         return future;
     }
 
+
+    @Override
+    public Future<Void> cleanDir(JsonObject service) {
+        final String name = service.getString("name");
+        if (name == null || name.isEmpty()) {
+            return Future.succeededFuture();
+        }
+        //avoid conflict
+        return MutexUtils.startUsingResource("deployment:"+name).compose(start-> {
+            final Future<Void> future = Future.future();
+            try {
+                log.info("Cleaning mod : " + name);
+                final String servicePath = getServicePath(service);
+                final Future<Void> deleteDir = Future.future();
+                log.info("Deleting dirs : " + servicePath);
+                vertx.fileSystem().deleteRecursive(servicePath, true, deleteDir);
+                //
+                deleteDir.setHandler(resDel -> {
+                    if (resDel.failed()) {
+                        log.error("Dir could not be cleaned: " + resDel.cause().getMessage());
+                    } else {
+                        log.info("Dir has been cleaned successfully : " + name);
+                    }
+                    future.complete();
+                });
+            } catch (Exception e) {
+                log.error("Failed to clean dir : " + name, e);
+                future.complete();
+            }
+            return future;
+        }).onComplete(end->{
+            MutexUtils.endUsingResource("deployment:"+name);
+        });
+    }
+
     @Override
     public Future<Void> restart(JsonObject service) {
         final String name = service.getString("name");

@@ -1,22 +1,24 @@
 package com.opendigitaleducation.launcher.listeners;
 
+import com.opendigitaleducation.launcher.VertxServiceLauncher;
 import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
-import com.opendigitaleducation.launcher.config.ConfigProviderConsul;
-import com.opendigitaleducation.launcher.config.ConfigProviderMemory;
-import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 
 public interface ArtefactListener {
-    static Optional<ArtefactListener> create(final ConfigProvider configProvider, final JsonObject config) {
+    static List<ArtefactListener> create(final ConfigProvider configProvider, final JsonObject config) throws Exception {
+        final List<ArtefactListener> listeners = new ArrayList<>();
         if (config.getBoolean(ArtefactListenerNexus.NEXUS_ENABLE, false)) {
-            return Optional.of(new ArtefactListenerNexus(configProvider));
+            listeners.add(new ArtefactListenerNexus(configProvider));
         }
-        return Optional.empty();
+        if (config.getBoolean(ArtefactListenerFileSystem.WATCHER_ENABLE, false)) {
+            listeners.add(new ArtefactListenerFileSystem(configProvider,config));
+        }
+        return listeners;
     }
     ArtefactListener start(Vertx vertx, JsonObject config);
     ArtefactListener stop();
