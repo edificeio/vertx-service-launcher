@@ -7,7 +7,6 @@ import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -24,14 +23,14 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
     public static final String WATCHER_DELAY = "watcherDelayMillis";
     private static final Logger log = LoggerFactory.getLogger(ArtefactListenerFileSystem.class);
     private final WatchService watcher;
-    private final String assetPath;
+    private final String baseDir;
     private final String servicePath;
     private List<Function<Void, Void>> onStop = new ArrayList<>();
     private final Map<WatchKey, Path> watchKeys = new HashMap<>();
 
     public ArtefactListenerFileSystem(final ConfigProvider aConfigProvider, final JsonObject config) throws IOException {
         super(aConfigProvider);
-        assetPath = config.getString("assets-path");
+        baseDir = config.getString("assets-path");
         watcher = FileSystems.getDefault().newWatchService();
         servicePath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
     }
@@ -39,25 +38,27 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
     @Override
     public ArtefactListener start(final Vertx vertx, final JsonObject config) {
         try {
-            final String watcherConf = config.getString(WATCHER_CONF, Paths.get(assetPath,"watcher.conf").toString());
-            final String watchDirs = config.getString(WATCHER_PATH, "mods");
+            final String watcherConf = config.getString(WATCHER_CONF, Paths.get(baseDir,"watcher.conf").toString());
+            final String watchDirs = config.getString(WATCHER_PATH, servicePath);
             log.info("Starting watcher: " + watchDirs);
             final long delay = config.getLong(WATCHER_DELAY, 500l);
-            loadWatcherList(vertx, watchDirs, watcherConf).onComplete(resList -> {
+            loadWatcherList(vertx, watcherConf).onComplete(resList -> {
                 final long timer = vertx.setPeriodic(delay, timerId -> {
                     try {
                         final List<Path> paths = processEvents();
                         for (final Path path : paths) {
                             final String name = path.getFileName().toString();
-                            if (name.equalsIgnoreCase(watcherConf)) {
-                                loadWatcherList(vertx, watchDirs, watcherConf);
+                            if (watcherConf.endsWith(name)) {
+                                loadWatcherList(vertx, watcherConf);
                             } else {
-                                if (recentlyTriggered.contains(name)) {
-                                    log.info("SKIP redeploy for module (" + name + "): already deployed");
-                                    return;
-                                }
                                 for (final Map.Entry<String, JsonObject> entry : names.entrySet()) {
-                                    if (name.contains(entry.getKey())) {
+                                    final String serviceName = entry.getValue().getString("name", "");
+                                    if (name.contains(serviceName)) {
+                                        if (recentlyTriggered.contains(serviceName)) {
+                                            log.info("SKIP redeploy for module (" + name + "): already triggered");
+                                            continue;
+                                        }
+                                        recentlyTriggered.add(serviceName);
                                         final JsonObject value = entry.getValue();
                                         //nexus need some delay to return the last artefact when deploy
                                         log.info("TRIGGER redeploy for module (" + name + ")");
@@ -71,6 +72,8 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
                     } catch (final Exception exc) {
                         log.error("Error occured while processing events: ", exc);
                     }
+                    //clear recently
+                    recentlyTriggered.clear();
                 });
                 onStop.add(e -> {
                     vertx.cancelTimer(timer);
@@ -107,7 +110,7 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
         watchKeys.clear();
     }
 
-    private Future<Void> loadWatcherList(final Vertx vertx, final String watchDir, final String config) {
+    private Future<Void> loadWatcherList(final Vertx vertx, final String config) {
         final Promise<Void> promise = Promise.promise();
         vertx.fileSystem().readFile(config, res -> {
             if (res.succeeded()) {
@@ -115,30 +118,37 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
                     clearWatchList();
                     final String[] lines = res.result().toString().split("\n");
                     //listen watcher file
+                    final WatchEvent.Kind<Path>[] kinds = Arrays.asList(StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY).toArray(new WatchEvent.Kind[3]);
                     {
                         final Path dirPath = Paths.get(config).getParent();
-                        final WatchKey dirKey = dirPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+                        final WatchKey dirKey = dirPath.register(watcher, kinds);
                         log.info("Watcher registered for: " + dirPath);
                         watchKeys.put(dirKey, dirPath);
                     }
                     //listen mods dir
                     {
                         final Path dirPath = Paths.get(servicePath);
-                        final WatchKey dirKey = dirPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+                        final WatchKey dirKeys = dirPath.register(watcher, kinds);
                         log.info("Watcher registered for: " + dirPath);
-                        watchKeys.put(dirKey, dirPath);
+                        watchKeys.put(dirKeys, dirPath);
                     }
                     //listen listed dir
-                    for (final String line : lines) {
-                        final Path dirPath = Paths.get(watchDir, line);
-                        if(Files.isDirectory(dirPath)){
-                            final WatchKey dirKey = dirPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
-                            log.info("Watcher registered for: " + dirPath);
-                            watchKeys.put(dirKey, dirPath);
+                    for (final String lin : lines) {
+                        final String[] parts = lin.split(":");
+                        final Path destPath = Paths.get(baseDir, parts[1]);
+                        if(Files.isDirectory(destPath)){
+                            final WatchKey dirKey = destPath.register(watcher, kinds);
+                            log.info("Watcher registered for: " + destPath);
+                            watchKeys.put(dirKey, destPath);
                         }else{
-                            final WatchKey dirKey = dirPath.getParent().register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
-                            log.info("Watcher registered for: " + dirPath.getParent());
-                            watchKeys.put(dirKey, dirPath.getParent());
+                            if(Paths.get(servicePath).equals(destPath.getParent())){
+                                log.info("Watcher registered for mods: " + destPath);
+                            }else{
+                                log.info("Watcher registering recursively for: " + destPath.getParent());
+                                final Map<WatchKey, Path> dirKeys = FileUtils.registerRecursive(watcher,destPath.getParent(), kinds);
+                                log.info("Watcher registered for: " + destPath.getParent());
+                                watchKeys.putAll(dirKeys);
+                            }
                         }
                     }
                     promise.complete(null);
@@ -160,16 +170,15 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
         while ((key = watcher.poll()) != null) {
             // watch key is null if no queued key is available
             if (key == null) break;
-
-            log.info("Events received, start processing... (key: " + key + ")");
             final Path dir = watchKeys.get(key);
+            log.info("Events received, start processing... (dir: " + dir + ")");
             if (dir == null) {
                 log.warn("watchKey not recognized! (" + key + ")");
                 continue;
             }
             for (final WatchEvent<?> event : key.pollEvents()) {
-                log.info("Processing changes for: " + dir);
                 final WatchEvent<Path> watchEvent = (WatchEvent<Path>) event;
+                log.info("Processing changes for: " + watchEvent.context());
                 final WatchEvent.Kind<Path> kind = watchEvent.kind();
                 if (kind.name().equals(StandardWatchEventKinds.OVERFLOW.name())) {
                     continue;
@@ -193,4 +202,5 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
         }
         return paths;
     }
+
 }

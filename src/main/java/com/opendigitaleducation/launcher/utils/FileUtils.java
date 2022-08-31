@@ -9,9 +9,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
 public class FileUtils {
     private static final String EMPTY_STRING = "";
@@ -139,4 +137,17 @@ public class FileUtils {
         return result.future();
     }
 
+    public static Map<WatchKey,Path> registerRecursive(final WatchService watchService, final Path root,final WatchEvent.Kind<Path>[] kinds) throws IOException {
+        final Map<WatchKey, Path> paths = new HashMap<>();
+        // register all subfolders
+        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs) throws IOException {
+                final WatchKey key = dir.register(watchService, kinds);
+                paths.put(key, dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return paths;
+    }
 }
