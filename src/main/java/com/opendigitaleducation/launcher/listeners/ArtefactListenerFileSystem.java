@@ -21,6 +21,7 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
     public static final String WATCHER_ENABLE = "watcherEnabled";
     public static final String WATCHER_PATH = "watcherPath";
     public static final String WATCHER_DELAY = "watcherDelayMillis";
+    public static final String WATCHER_SPAN = "watcherLockSeconds";
     private static final Logger log = LoggerFactory.getLogger(ArtefactListenerFileSystem.class);
     private final WatchService watcher;
     private final String baseDir;
@@ -38,10 +39,11 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
     @Override
     public ArtefactListener start(final Vertx vertx, final JsonObject config) {
         try {
-            final String watcherConf = config.getString(WATCHER_CONF, Paths.get(baseDir,"watcher.conf").toString());
+            final String watcherConf = config.getString(WATCHER_CONF, Paths.get(servicePath,"watcher.conf").toString());
             final String watchDirs = config.getString(WATCHER_PATH, servicePath);
             log.info("Starting watcher: " + watchDirs);
             final long delay = config.getLong(WATCHER_DELAY, 500l);
+            final int seconds = config.getInteger(WATCHER_SPAN, 5);
             loadWatcherList(vertx, watcherConf).onComplete(resList -> {
                 final long timer = vertx.setPeriodic(delay, timerId -> {
                     try {
@@ -58,7 +60,7 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
                                             log.info("SKIP redeploy for module (" + name + "): already triggered");
                                             continue;
                                         }
-                                        recentlyTriggered.add(serviceName);
+                                        pushServiceAddedRecently(vertx, serviceName, seconds);
                                         final JsonObject value = entry.getValue();
                                         //nexus need some delay to return the last artefact when deploy
                                         log.info("TRIGGER redeploy for module (" + name + ")");
@@ -72,8 +74,6 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
                     } catch (final Exception exc) {
                         log.error("Error occured while processing events: ", exc);
                     }
-                    //clear recently
-                    recentlyTriggered.clear();
                 });
                 onStop.add(e -> {
                     vertx.cancelTimer(timer);
@@ -119,24 +119,36 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
                     final String[] lines = res.result().toString().split("\n");
                     //listen watcher file
                     final WatchEvent.Kind<Path>[] kinds = Arrays.asList(StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY).toArray(new WatchEvent.Kind[3]);
-                    {
-                        final Path dirPath = Paths.get(config).getParent();
-                        final WatchKey dirKey = dirPath.register(watcher, kinds);
-                        log.info("Watcher registered for: " + dirPath);
-                        watchKeys.put(dirKey, dirPath);
+                    final Set<Path> watched = new HashSet<>();
+                    final Path configDirPath = Paths.get(config).getParent();
+                    if(!watched.contains(configDirPath)){
+                        final WatchKey dirKey = configDirPath.register(watcher, kinds);
+                        log.info("Watcher registered for: " + configDirPath);
+                        watchKeys.put(dirKey, configDirPath);
+                        watched.add(configDirPath);
                     }
                     //listen mods dir
-                    {
-                        final Path dirPath = Paths.get(servicePath);
-                        final WatchKey dirKeys = dirPath.register(watcher, kinds);
-                        log.info("Watcher registered for: " + dirPath);
-                        watchKeys.put(dirKeys, dirPath);
+                    final Path modDirPath = Paths.get(servicePath);
+                    if(!watched.contains(modDirPath)){
+                        final WatchKey dirKeys = modDirPath.register(watcher, kinds);
+                        log.info("Watcher registered for: " + modDirPath);
+                        watchKeys.put(dirKeys, modDirPath);
+                        watched.add(modDirPath);
                     }
                     //listen listed dir
                     for (final String lin : lines) {
                         final String[] parts = lin.split(":");
+                        if(parts.length < 2){
+                            continue;
+                        }
                         final Path destPath = Paths.get(baseDir, parts[1]);
                         if(Files.isDirectory(destPath)){
+                            //check if already
+                            if(watched.contains(destPath)){
+                                continue;
+                            }
+                            watched.add(destPath);
+                            //watch
                             final WatchKey dirKey = destPath.register(watcher, kinds);
                             log.info("Watcher registered for: " + destPath);
                             watchKeys.put(dirKey, destPath);
@@ -144,6 +156,12 @@ public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigC
                             if(Paths.get(servicePath).equals(destPath.getParent())){
                                 log.info("Watcher registered for mods: " + destPath);
                             }else{
+                                //check if already
+                                if(watched.contains(destPath.getParent())){
+                                    continue;
+                                }
+                                watched.add(destPath.getParent());
+                                //watch
                                 log.info("Watcher registering recursively for: " + destPath.getParent());
                                 final Map<WatchKey, Path> dirKeys = FileUtils.registerRecursive(watcher,destPath.getParent(), kinds);
                                 log.info("Watcher registered for: " + destPath.getParent());
