@@ -17,11 +17,11 @@ import java.util.*;
 import java.util.function.Function;
 
 public class ArtefactListenerFileSystem extends ArtefactListenerAbstract<ConfigChangeEvent> {
-    public static final String WATCHER_CONF = "watcherConf";
-    public static final String WATCHER_ENABLE = "watcherEnabled";
-    public static final String WATCHER_PATH = "watcherPath";
-    public static final String WATCHER_DELAY = "watcherDelayMillis";
-    public static final String WATCHER_SPAN = "watcherLockSeconds";
+    public static final String WATCHER_CONF = "watcherFsConf";
+    public static final String WATCHER_ENABLE = "watcherFsEnabled";
+    public static final String WATCHER_PATH = "watcherFsPath";
+    public static final String WATCHER_DELAY = "watcherFsDelayMillis";
+    public static final String WATCHER_SPAN = "watcherFsLockSeconds";
     private static final Logger log = LoggerFactory.getLogger(ArtefactListenerFileSystem.class);
     private final WatchService watcher;
     private final String baseDir;

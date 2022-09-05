@@ -2,17 +2,18 @@ package com.opendigitaleducation.launcher.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.opendigitaleducation.launcher.VertxServiceLauncher;
 import io.vertx.core.Handler;
 import io.vertx.core.json.JsonObject;
 
 public abstract class ConfigChangeEvent {
-    private VertxServiceLauncher.Clean cleanType = VertxServiceLauncher.Clean.None;
+    private Optional<VertxServiceLauncher.Clean> cleanType = Optional.empty();
     private final List<Handler<Boolean>> endHandlers = new ArrayList<>();
     private final List<Handler<Void>> emptyHandlers = new ArrayList<>();
 
-    public VertxServiceLauncher.Clean isCleanType() {
+    public Optional<VertxServiceLauncher.Clean> getCleanType() {
         return cleanType;
     }
 
@@ -66,7 +67,7 @@ public abstract class ConfigChangeEvent {
     }
 
     public ConfigChangeEvent setCleanType(VertxServiceLauncher.Clean cleanType) {
-        this.cleanType = cleanType;
+        this.cleanType = Optional.of(cleanType);
         return this;
     }
 }

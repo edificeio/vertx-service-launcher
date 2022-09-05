@@ -15,6 +15,9 @@ public interface ArtefactListener {
         if (config.getBoolean(ArtefactListenerNexus.NEXUS_ENABLE, false)) {
             listeners.add(new ArtefactListenerNexus(configProvider));
         }
+        if (config.getBoolean(ArtefactListenerLocal.WATCHER_ENABLE, false)) {
+            listeners.add(new ArtefactListenerLocal(configProvider));
+        }
         if (config.getBoolean(ArtefactListenerFileSystem.WATCHER_ENABLE, false)) {
             listeners.add(new ArtefactListenerFileSystem(configProvider,config));
         }

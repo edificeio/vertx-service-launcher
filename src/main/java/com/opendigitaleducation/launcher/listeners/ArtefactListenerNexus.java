@@ -107,9 +107,13 @@ public class ArtefactListenerNexus extends ArtefactListenerAbstract<ArtefactList
 
     public static class ConfigChangeEventNexus extends ConfigChangeEvent {
         private final List<JsonObject> services = new ArrayList<>();
+        private final List<JsonObject> toDeploy = new ArrayList<>();
+        private final List<JsonObject> toUnDeploy = new ArrayList<>();
 
         ConfigChangeEventNexus(JsonObject service) {
             services.add(service);
+            toDeploy.add(service);
+            toUnDeploy.add(service);
         }
 
         @Override
@@ -119,12 +123,12 @@ public class ArtefactListenerNexus extends ArtefactListenerAbstract<ArtefactList
 
         @Override
         public List<JsonObject> getServicesToUndeploy() {
-            return services;
+            return toUnDeploy;
         }
 
         @Override
         public List<JsonObject> getServicesToDeploy() {
-            return services;
+            return toDeploy;
         }
 
         @Override

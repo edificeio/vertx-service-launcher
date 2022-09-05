@@ -70,7 +70,8 @@ public class VertxServiceLauncher extends AbstractVerticle {
             configProvider.addListener(new ConfigProviderListenerConsulCDN(config(), vertx, servicesPath));
         }
         configProvider.onConfigChange(resConfig -> {
-            onChangeEvent(resConfig, clean? Clean.All : resConfig.isCleanType());
+            final Clean cleanType = resConfig.getCleanType().orElse(clean? Clean.All : Clean.None);
+            onChangeEvent(resConfig, cleanType);
         });
         artefactListener.clear();
         artefactListener.addAll(ArtefactListener.create(configProvider, config()));
