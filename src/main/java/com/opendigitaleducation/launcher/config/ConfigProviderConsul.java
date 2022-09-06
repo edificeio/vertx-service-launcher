@@ -96,14 +96,17 @@ public class ConfigProviderConsul implements ConfigProvider {
             final String dumpFolder = originalConfig.getString("assets-path", ".") + File.separator
                 + "history";
             final String file = dumpFolder + File.separator + dateFormat + "-config.json";
-            vertx.fileSystem().mkdir(dumpFolder, r -> {//mkdir if not exists
-                vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()),
-                    resW -> {
-                        if (resW.failed()) {
-                            log.error("Failed to dump config : ", resW.cause());
-                        }
-                    });
-            });
+            if(event instanceof ConfigChangeEventConsul){
+                //dump only full config
+                vertx.fileSystem().mkdir(dumpFolder, r -> {//mkdir if not exists
+                    vertx.fileSystem().writeFile(file, Buffer.buffer(event.getDump().encodePrettily()),
+                        resW -> {
+                            if (resW.failed()) {
+                                log.error("Failed to dump config : ", resW.cause());
+                            }
+                        });
+                });
+            }
         }).onEmpty(resEmpty -> {
             initTimer();
             triggerAfterChange(event, false);
