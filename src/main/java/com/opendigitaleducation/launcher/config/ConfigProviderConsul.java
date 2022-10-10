@@ -220,7 +220,7 @@ public class ConfigProviderConsul implements ConfigProvider {
 
     private static class ConfigChangeEventConsul extends ConfigChangeEvent {
         private List<ConfigBuilder.ServiceConfig> orderedServices = new ArrayList<>();
-        private Map<String, ConfigBuilder.ServiceConfig> modelByKey = new HashMap<>();
+        private Map<String, List<ConfigBuilder.ServiceConfig>> modelByKey = new HashMap<>();
         private List<JsonObject> toRestart = new ArrayList<>();
         private List<JsonObject> toDeploy = new ArrayList<>();
         private List<JsonObject> toUndeploy = new ArrayList<>();
@@ -255,11 +255,12 @@ public class ConfigProviderConsul implements ConfigProvider {
             this.orderedServices = servicesList;
             // compute changes
             for (final ConfigBuilder.ServiceConfig jsonService : servicesList) {
-                modelByKey.put(jsonService.getKey(), jsonService);
+                modelByKey.putIfAbsent(jsonService.getKey(), new ArrayList<>());
+                modelByKey.get(jsonService.getKey()).add(jsonService);
                 final JsonObject serviceConfig = jsonService.getConfig();
                 serviceConfig.put("consulKey", jsonService.getKey());
                 if (previous.keyExists(jsonService)) {
-                    final ConfigBuilder.ServiceConfig previousService = previous.getService(jsonService);
+                    final ConfigBuilder.ServiceConfig previousService = previous.getServices(jsonService).get(0);
                     if (previous.valueHasChanges(jsonService)) {
                         if (jsonService.getFullQualifiedName().equals(previousService.getFullQualifiedName())) {
                             // restart module
@@ -282,7 +283,9 @@ public class ConfigProviderConsul implements ConfigProvider {
                     // DO NOTHING
                 } else {
                     // remove module
-                    toUndeploy.add(previous.getService(previousKey).getConfig());
+                    toUndeploy.addAll(previous.getServices(previousKey).stream().map(e->{
+                        return e.getConfig();
+                    }).collect(Collectors.toList()));
                 }
             }
         }
@@ -291,20 +294,29 @@ public class ConfigProviderConsul implements ConfigProvider {
             return orderedServices.stream().map(e->e.getKey()).collect(Collectors.toList());
         }
 
-        public ConfigBuilder.ServiceConfig getService(final String key) {
+        public List<ConfigBuilder.ServiceConfig> getServices(final String key) {
             return modelByKey.get(key);
         }
 
-        public ConfigBuilder.ServiceConfig getService(final ConfigBuilder.ServiceConfig key) {
+        public List<ConfigBuilder.ServiceConfig> getServices(final ConfigBuilder.ServiceConfig key) {
             return modelByKey.get(key.getKey());
         }
 
         public boolean keyExists(final ConfigBuilder.ServiceConfig key) {
-            return modelByKey.containsKey(key.getKey());
+            return modelByKey.containsKey(key.getKey()) && modelByKey.get(key.getKey()).size() > 0;
         }
 
         public boolean valueHasChanges(final ConfigBuilder.ServiceConfig other) {
-            return modelByKey.get(other.getKey()).hasChanged(other);
+            final List<ConfigBuilder.ServiceConfig> services = modelByKey.getOrDefault(other.getKey(), new ArrayList<>());
+            for(final ConfigBuilder.ServiceConfig config: services){
+                final boolean hasChanged = config.hasChanged(other);
+                //config has not changed => return false
+                if(!hasChanged){
+                    return false;
+                }
+            }
+            //seems that config has changed 
+            return true;
         }
 
         @Override
