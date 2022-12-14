@@ -20,11 +20,11 @@
 
     <groupId>com.opendigitaleducation</groupId>
     <artifactId>vertx-service-launcher</artifactId>
-    <version>1.4.0</version>
+    <version>1.4.1</version>
 
     <properties>
         <java.version>1.8</java.version>
-        <vertx.version>3.9.5</vertx.version>
+        <vertx.version>3.9.14</vertx.version>
         <dockerfile-maven-version>1.3.7</dockerfile-maven-version>
         <junit.version>4.12</junit.version>
         <micrometer.version>1.1.0</micrometer.version>
