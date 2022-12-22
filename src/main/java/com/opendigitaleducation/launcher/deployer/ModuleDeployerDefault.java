@@ -27,6 +27,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
     private final Vertx vertx;
     private final String servicesPath;
     private final String absoluteServicePath;
+    private final JsonObject metricsOptions;
     private CustomDeployerManager customDeployer;
     private final LocalMap<String, String> versionMap;
     private final LocalMap<String, String> deploymentsIdMap;
@@ -36,6 +37,8 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         this.vertx = vertx;
         assetPath = config.getString("assets-path");
         absoluteServicePath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
+        // metrics options
+        metricsOptions = config.getJsonObject("metricsOptions");
         // cluster flag
         final LocalMap<Object, Object> serverMap = vertx.sharedData().getLocalMap("server");
         cluster = config.getBoolean("cluster", false);
@@ -66,6 +69,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         log.info("Starting deployment of mod : " + name);
         final JsonObject config = service.getJsonObject("config", new JsonObject());
         config.put("cwd", absoluteServicePath + File.separator + name);
+        config.put("metricsOptions", metricsOptions);
         if (!config.containsKey("assets-path") && assetPath != null) {
             config.put("assets-path", assetPath);
         }
