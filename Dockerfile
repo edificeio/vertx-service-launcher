@@ -1,4 +1,4 @@
-FROM openjdk:8-jre
+FROM arm64v8/eclipse-temurin:8-jre-focal
 LABEL maintainer="Damien BOISSIN <damien.boissin@opendigitaleducation.com>"
 
 ARG JAR_FILE
