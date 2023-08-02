@@ -165,6 +165,7 @@
               <configuration>
                 <repository>opendigitaleducation/vertx-service-launcher</repository>
                 <tag>${project.version}</tag>
+                <skip>${skipMavenDockerBuild}</skip>
                 <buildArgs>
                   <JAR_FILE>${project.artifactId}-${project.version}-fat.jar</JAR_FILE>
                 </buildArgs>
