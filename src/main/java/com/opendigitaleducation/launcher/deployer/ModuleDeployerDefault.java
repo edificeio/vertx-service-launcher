@@ -3,8 +3,10 @@ package com.opendigitaleducation.launcher.deployer;
 import static com.opendigitaleducation.launcher.FolderServiceFactory.FACTORY_PREFIX;
 
 import java.io.File;
-import java.util.List;
-import java.util.Optional;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Scanner;
 
 import com.opendigitaleducation.launcher.hooks.Hook;
 import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
@@ -30,8 +32,20 @@ public class ModuleDeployerDefault implements ModuleDeployer {
     private final JsonObject metricsOptions;
     private CustomDeployerManager customDeployer;
     private final LocalMap<String, String> versionMap;
+    /** Map holding useful metadata about deployed modules. */
+    private final LocalMap<String, JsonObject> detailedVersionMap;
     private final LocalMap<String, String> deploymentsIdMap;
+    /** Entry keys of MANIFEST.MF file of deployed modules that should be used to populate detailed version metadata.*/
+    private static final Map<String, String> manifestKeysForVersion;
     private static Logger log = LoggerFactory.getLogger(ModuleDeployerDefault.class);
+
+    static {
+        final Map<String, String> map = new HashMap<>();
+        map.put("SCM-Commit-Id", "commitId");
+        map.put("SCM-Branch", "branch");
+        map.put("Build-Time", "buildTime");
+        manifestKeysForVersion = Collections.unmodifiableMap(map);
+    }
 
     public ModuleDeployerDefault(Vertx vertx, JsonObject config) {
         this.vertx = vertx;
@@ -49,6 +63,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         // maps
         deploymentsIdMap = vertx.sharedData().getLocalMap("deploymentsId");
         versionMap = vertx.sharedData().getLocalMap("versions");
+        detailedVersionMap = vertx.sharedData().getLocalMap("detailedVersions");
         //
         this.servicesPath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
         customDeployer = new CustomDeployerManager(vertx, servicesPath, assetPath);
@@ -68,7 +83,8 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         }
         log.info("Starting deployment of mod : " + name);
         final JsonObject config = service.getJsonObject("config", new JsonObject());
-        config.put("cwd", absoluteServicePath + File.separator + name);
+        final String servicePath = absoluteServicePath + File.separator + name;
+        config.put("cwd", servicePath);
         config.put("metricsOptions", metricsOptions);
         if (!config.containsKey("assets-path") && assetPath != null) {
             config.put("assets-path", assetPath);
@@ -101,7 +117,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
             if (ar.succeeded()) {
                 log.info("Mod has been deployed successfully : " + name);
-                addAppVersion(name, ar.result());
+                addAppVersion(name, ar.result(), servicePath);
                 future.complete();
                 hook.emit(service, Hook.HookEvents.Deployed);
             } else {
@@ -208,19 +224,48 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         return future;
     }
 
-    private void addAppVersion(final String moduleName, final String deploymentId) {
+    private void addAppVersion(final String moduleName,
+                               final String deploymentId,
+                               final String servicePath) {
         final String[] lNameVersion = moduleName.split("~");
+
         if (lNameVersion.length == 3) {
-            versionMap.put(lNameVersion[0] + "." + lNameVersion[1], lNameVersion[2]);
+            final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
+            final String version = lNameVersion[2];
+            versionMap.put(moduleKey, version);
             deploymentsIdMap.put(moduleName, deploymentId);// use module name in case of multiple mods with different
                                                            // versions
+            // Construct the detailedVersion map by parsing the manifest file of the module and
+            // extracting only the desired pieces of information
+            // If there is no manifest, only the version of the module has specified in entcore.json
+            // will be available.
+            vertx.fileSystem().readFile(servicePath + "/META-INF" + File.separator + "MANIFEST.MF", ar -> {
+                final JsonObject detailedVersion = new JsonObject();
+                detailedVersion.put("version", version);
+                if (ar.succeeded()) {
+                    Scanner s = new Scanner(ar.result().toString());
+                    while (s.hasNextLine()) {
+                        final String line = s.nextLine();
+                        final String[] items = line.split(":", 2);
+                        if (items.length == 2) {
+                            final String key = items[0];
+                            if(manifestKeysForVersion.containsKey(key)) {
+                                detailedVersion.put(manifestKeysForVersion.get(key), items[1].trim());
+                            }
+                        }
+                    }
+                }
+                detailedVersionMap.put(moduleKey, detailedVersion);
+            });
         }
     }
 
     private void removeAppVersion(final String moduleName) {
         final String[] lNameVersion = moduleName.split("~");
         if (lNameVersion.length == 3) {
-            versionMap.remove(lNameVersion[0] + "." + lNameVersion[1], lNameVersion[2]);
+            final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
+            versionMap.remove(moduleKey, lNameVersion[2]);
+            detailedVersionMap.remove(moduleKey);
             deploymentsIdMap.remove(moduleName);
         }
     }
