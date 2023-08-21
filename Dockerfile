@@ -5,7 +5,7 @@ COPY ./src ./src
 COPY ./migration ./migration
 RUN mvn clean install -Dmaven.test.skip=true -DskipMavenDockerBuild
 
-FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-focal
+FROM eclipse-temurin:8-jre-focal
 LABEL maintainer="Damien BOISSIN <damien.boissin@edifice.io>"
 
 ARG JAR_FILE
