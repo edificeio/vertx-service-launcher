@@ -362,4 +362,10 @@ public class ConfigProviderConsul implements ConfigProvider {
         listeners.add(listener);
         return this;
     }
+
+    @Override
+    public JsonObject getServiceByName(String name) {
+        throw new UnsupportedOperationException("Unimplemented method 'getServiceByName'");
+    }
+
 }

@@ -9,6 +9,9 @@ import com.opendigitaleducation.launcher.listeners.ArtefactListener;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
+import io.vertx.core.Handler;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
@@ -16,11 +19,15 @@ import java.util.Optional;
 
 public class VertxServiceLauncher extends AbstractVerticle {
 
+    private static final String SERVICE_LAUNCHER = "service-launcher.deployment";
     private static final Logger log = LoggerFactory.getLogger(VertxServiceLauncher.class);
+    private static final int ERROR_RESTARTING_MODULE_CODE = 2;
+    private static final int ERROR_UNKNOWN_ACTION_CODE = 1;
     private static int countDeployments = 0;
     private ConfigProvider configProvider;
     private Optional<ArtefactListener> artefactListener = Optional.empty();
     private ModuleDeployer deployer;
+
     private void onChangeEvent(final ConfigChangeEvent resConfig, final boolean clean){
         if (resConfig.hasPendingTasks()) {
             countDeployments++;
@@ -51,6 +58,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
             resConfig.empty();
         }
     }
+
     @Override
     public void start() throws Exception {
         final Boolean clean = config().getBoolean("clean", true);
@@ -73,6 +81,26 @@ public class VertxServiceLauncher extends AbstractVerticle {
                 configProvider.triggerChange(res.setForceClean(true));
             });
         }
+        vertx.eventBus().localConsumer(SERVICE_LAUNCHER, deploymentActions());
+    }
+
+    private Handler<Message<JsonObject>> deploymentActions() {
+        return message -> {
+            final String action = message.body().getString("action");
+            switch (action) {
+                case "restart-module":
+                    final String moduleName = message.body().getString("module-name", "");
+                    deployer.restart(configProvider.getServiceByName(moduleName))
+                            .onSuccess( s -> message.reply(new JsonObject().put("status", "ok")))
+                            .onFailure( e -> {
+                                log.error("Error restarting module " + moduleName, e);
+                                message.fail(ERROR_RESTARTING_MODULE_CODE, "Error restarting module " + moduleName);
+                            });
+                    break;
+                default:
+                    message.fail(ERROR_UNKNOWN_ACTION_CODE, "Unknown action");
+            }
+        };
     }
 
     @Override

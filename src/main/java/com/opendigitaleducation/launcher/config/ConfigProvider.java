@@ -23,4 +23,7 @@ public interface ConfigProvider {
     ConfigProvider stop(Vertx vertx);
 
     ConfigProvider addListener(ConfigProviderListener listener);
+
+    JsonObject getServiceByName(String name);
+
 }

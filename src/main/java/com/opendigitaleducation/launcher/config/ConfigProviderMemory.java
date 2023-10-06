@@ -82,4 +82,17 @@ public class ConfigProviderMemory implements ConfigProvider {
         return this;
     }
 
+    @Override
+    public JsonObject getServiceByName(String name) {
+        final JsonArray services = config.getJsonArray("services", new JsonArray());
+        for (Object o: services) {
+            if (!(o instanceof JsonObject)) continue;
+            final JsonObject service = (JsonObject) o;
+            if (service.getString("name", "").contains("~" + name + "~")) {
+                return service;
+            }
+        }
+        return null;
+    }
+
 }
