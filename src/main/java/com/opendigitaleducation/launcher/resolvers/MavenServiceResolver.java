@@ -5,9 +5,8 @@ import com.opendigitaleducation.launcher.utils.JsonUtil;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpClient;
-import io.vertx.core.http.HttpClientOptions;
-import io.vertx.core.http.HttpClientRequest;
+import io.vertx.core.http.*;
+import io.vertx.core.http.impl.headers.HeadersMultiMap;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.w3c.dom.Document;
@@ -117,51 +116,50 @@ public class MavenServiceResolver extends AbstactServiceResolver {
     }
 
     private void downloadFile(int index, String identifier, String path, JsonArray repositories, List<HttpClient> clients, Handler<AsyncResult<String>> handler, HttpClient client, String uri, String credential) {
-        HttpClientRequest req = client.get(uri, resp -> {
-            resp.exceptionHandler(e->{
-                log.error("Response Exception while downloading service: "+uri,e);
-            });
-            if (resp.statusCode() == 200) {
-                resp.bodyHandler(buffer -> {
-                    if (uri.endsWith(MAVEN_METADATA_XML)) {
-                        try {
-                            final String snapshotUri = getSnapshotPath(buffer.toString(),
-                                uri.replaceFirst(MAVEN_METADATA_XML, ""), identifier);
-                            log.info("Downloading service "+ identifier+ "->"+snapshotUri);
-                            downloadFile(index, identifier, path, repositories, clients, handler,
-                                client, snapshotUri, credential);
-                        } catch (Exception e) {
-                            log.error("Error reading snapshot metadata", e);
-                            handleAsyncError(e, handler);
-                        }
-                    } else {
-                        final String ext = getExtensionForId(identifier);
-                        final String destFile = servicesPath + File.separator + identifier + ext;
-                        vertx.fileSystem().writeFile(destFile, buffer, ar -> {
-                            if (ar.succeeded()) {
-                                DefaultAsyncResult.handleAsyncResult(destFile, handler);
-                            } else {
-                                DefaultAsyncResult.handleAsyncError(ar.cause(), handler);
-                            }
-                        });
-                    }
-                });
-            } else {
-                downloadService(index + 1, identifier, path, repositories, clients, handler);
-                if(resp.statusCode() == 401){
-                    log.error("Failed to authenticate to maven repo: " + uri);
-                } else if(index+1 == repositories.size()){
-                    log.error("Failed to download service: "+ resp.statusCode()+" -- "+ uri);
-                }
-            }
-        });
+        final HeadersMultiMap headers = new HeadersMultiMap();
         if (credential != null) {
-            req.putHeader("Authorization", "Basic " + credential);
+            headers.add("Authorization", "Basic " + credential);
         }
-        req.exceptionHandler(e->{
-            log.error("Request Exception while downloading service: "+uri,e);
-        });
-        req.end();
+        client.request(new RequestOptions()
+                .setAbsoluteURI(uri)
+                .setHeaders(headers))
+            .flatMap(HttpClientRequest::send)
+            .onSuccess(resp -> {
+                if (resp.statusCode() == 200) {
+                    resp.bodyHandler(buffer -> {
+                        if (uri.endsWith(MAVEN_METADATA_XML)) {
+                            try {
+                                final String snapshotUri = getSnapshotPath(buffer.toString(),
+                                    uri.replaceFirst(MAVEN_METADATA_XML, ""), identifier);
+                                log.info("Downloading service "+ identifier+ "->"+snapshotUri);
+                                downloadFile(index, identifier, path, repositories, clients, handler,
+                                    client, snapshotUri, credential);
+                            } catch (Exception e) {
+                                log.error("Error reading snapshot metadata", e);
+                                handleAsyncError(e, handler);
+                            }
+                        } else {
+                            final String ext = getExtensionForId(identifier);
+                            final String destFile = servicesPath + File.separator + identifier + ext;
+                            vertx.fileSystem().writeFile(destFile, buffer, ar -> {
+                                if (ar.succeeded()) {
+                                    DefaultAsyncResult.handleAsyncResult(destFile, handler);
+                                } else {
+                                    DefaultAsyncResult.handleAsyncError(ar.cause(), handler);
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    downloadService(index + 1, identifier, path, repositories, clients, handler);
+                    if(resp.statusCode() == 401){
+                        log.error("Failed to authenticate to maven repo: " + uri);
+                    } else if(index+1 == repositories.size()){
+                        log.error("Failed to download service: "+ resp.statusCode()+" -- "+ uri);
+                    }
+                }
+            })
+            .onFailure(e -> log.error("Request Exception while downloading service: "+uri,e));
     }
 
     protected HttpClient createClient(String repository, List<HttpClient> clients) throws URISyntaxException {

@@ -1,14 +1,15 @@
 package com.opendigitaleducation.launcher.hooks;
 
 import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpClient;
-import io.vertx.core.http.HttpClientRequest;
+import io.vertx.core.http.*;
+import io.vertx.core.http.impl.headers.HeadersMultiMap;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 public class HookSlack implements Hook {
@@ -37,17 +38,19 @@ public class HookSlack implements Hook {
         try{
             if(events.contains(HookEvents.Deployed)) {
                 final String name = service.getString("name").replaceAll("~", " ");
-                final HttpClient client = vertx.createHttpClient();
-                final HttpClientRequest req = client.postAbs(slackHook, e -> {
-                    if (e.statusCode() != 200) {
-                        log.error("Slack hook bad status: " + e.statusCode() + "/" + e.statusMessage());
-                    }
-                });
-                req.exceptionHandler(e -> {
-                    log.error("Slack hook failed: ", e);
-                });
-                final String text = String.format("%s déployé sur %s %s", name, hostName, nodeName);
-                req.end(new JsonObject().put("text", text).toString());
+                vertx.createHttpClient().request(new RequestOptions()
+                        .setMethod(HttpMethod.POST)
+                        .setAbsoluteURI(slackHook))
+                    .flatMap(req -> {
+                        final String text = String.format("%s déployé sur %s %s", name, hostName, nodeName);
+                        return req.send(new JsonObject().put("text", text).toString());
+                    })
+                    .onSuccess(response -> {
+                        if (response.statusCode() != 200) {
+                            log.error("Slack hook bad status: " + response.statusCode() + "/" + response.statusMessage());
+                        }
+                    })
+                    .onFailure(e -> log.error("Slack hook failed: ", e));
             }
         }catch(Exception e){
             log.error("Slack hook error: ", e);
