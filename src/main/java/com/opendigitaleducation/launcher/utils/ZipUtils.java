@@ -97,7 +97,7 @@ public class ZipUtils {
                 jar = new JarFile(jarFile);
                 Enumeration<JarEntry> enumEntries = jar.entries();
                 while (enumEntries.hasMoreElements()) {
-                    final JarEntry file = (JarEntry) enumEntries.nextElement();
+                    final JarEntry file = enumEntries.nextElement();
                     final File f = new File(destDir + File.separator + file.getName());
                     if (file.isDirectory()) {
                         f.mkdirs();
@@ -129,14 +129,14 @@ public class ZipUtils {
             } catch (IOException e) {
                 if (!promise.future().isComplete()) {
                     promise.fail(e);
-                    log.error("Error while unzip jar.", e);
+                    log.error("Error while unziping jar " + jarFile + " to destination directory " + destDir, e);
                 }
             } finally {
                 if (jar != null) {
                     try {
                         jar.close();
                     } catch (IOException e) {
-                        log.error("Error closing jar file.", e);
+                        log.error("Error closing jar file " + jarFile, e);
                     }
                 }
             }

@@ -12,10 +12,7 @@ import com.opendigitaleducation.launcher.hooks.Hook;
 import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 
-import io.vertx.core.CompositeFuture;
-import io.vertx.core.DeploymentOptions;
-import io.vertx.core.Future;
-import io.vertx.core.Vertx;
+import io.vertx.core.*;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -95,37 +92,37 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         }
         final DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(config)
                 .setWorker(service.getBoolean("worker", false)).setInstances(config.getInteger("instances", 1))
-                .setMultiThreaded(service.getBoolean("multi-threaded", false));
+                ;// TODO JBER check .setMultiThreaded(service.getBoolean("multi-threaded", false));
         // register extension
         ExtensionRegistry.register(ModuleDeployer.getServiceIdQuietly(service), service);
         // custom deployer
-        final Future<Void> future = Future.future();
+        final Promise<Void> promise = Promise.promise();
         if (customDeployer.canDeploy(service)) {
             customDeployer.deploy(service, res -> {
                 if (res.succeeded()) {
                     log.info("Custom deployment succeed :" + name);
-                    future.complete();
+                    promise.complete();
                     hook.emit(service, Hook.HookEvents.Deployed);
                 } else {
                     log.error("Custom deployment failed :" + name, res.cause());
-                    future.fail(res.cause());
+                    promise.fail(res.cause());
                 }
             });
-            return future;
+            return promise.future();
         }
         //
         vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
             if (ar.succeeded()) {
                 log.info("Mod has been deployed successfully : " + name);
                 addAppVersion(name, ar.result(), servicePath);
-                future.complete();
+                promise.complete();
                 hook.emit(service, Hook.HookEvents.Deployed);
             } else {
                 log.error("Error deploying required service  : " + name, ar.cause());
-                future.fail(ar.cause());
+                promise.fail(ar.cause());
             }
         });
-        return future;
+        return promise.future();
     }
 
     @Override
@@ -134,7 +131,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         if (name == null || name.isEmpty()) {
             return Future.succeededFuture();
         }
-        final Future<Void> future = Future.future();
+        final Promise<Void> future = Promise.promise();
         // custom deployer
         if (customDeployer.canDeploy(service)) {
             customDeployer.undeploy(service, res -> {
@@ -147,7 +144,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                     future.fail(res.cause());
                 }
             });
-            return future;
+            return future.future();
         }
         // defaut undeployer
         log.info("Starting undeployment of mod : " + name);
@@ -167,7 +164,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             log.warn("Deployment ID not found for service : " + name);
             future.complete();
         }
-        return future;
+        return future.future();
     }
 
     @Override
@@ -176,22 +173,20 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         if (name == null || name.isEmpty()) {
             return Future.succeededFuture();
         }
-        final Future<Void> future = Future.future();
+        final Promise<Void> future = Promise.promise();
         try {
             log.info("Cleaning mod : " + name);
             final String servicePath = getServicePath(service);
             final String ext = ExtensionRegistry.getExtensionForService(service);
-            final Future<Void> deleteDir = Future.future();
-            final Future<Void> deleteArtefact = Future.future();
             final String artefact = FileUtils.pathWithExtension(servicePath, ext);
             log.info("Deleting dirs : " + servicePath+";"+artefact);
-            vertx.fileSystem().deleteRecursive(servicePath, true, deleteDir);
-            vertx.fileSystem().delete(artefact, deleteArtefact);
+            final Future<Void> deleteDir = vertx.fileSystem().deleteRecursive(servicePath, true);
+            final Future<Void> deleteArtefact = vertx.fileSystem().delete(artefact);
             //
-            CompositeFuture.all(deleteDir, deleteArtefact).setHandler(resDel -> {
+            Future.all(deleteDir, deleteArtefact).onComplete(resDel -> {
                 if (resDel.failed()) {
-                    log.error("Mod has been cleaned successfully but service directory/artefact could not be cleaned: "+
-                            resDel.cause().getMessage());
+                    log.error("Mod has been cleaned successfully but service directory/artefact could not be cleaned: ",
+                            resDel.cause());
                 } else {
                     log.info("Mod has been cleaned successfully : " + name);
                 }
@@ -201,7 +196,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             log.error("Failed to clean service : " + name, e);
             future.complete();
         }
-        return future;
+        return future.future();
     }
 
     @Override
@@ -212,16 +207,16 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         }
         log.info("Starting restart of mod : " + name);
         //
-        final Future<Void> future = Future.future();
-        undeploy(service).setHandler(ar0 -> {
+        final Promise<Void> future = Promise.promise();
+        undeploy(service).onComplete(ar0 -> {
             if (ar0.succeeded()) {
-                deploy(service).setHandler(future);
+                deploy(service).onComplete(future);
             } else {
                 log.error("Error restarting (undeploying) required service  : " + name, ar0.cause());
                 future.fail(ar0.cause());
             }
         });
-        return future;
+        return future.future();
     }
 
     private void addAppVersion(final String moduleName,

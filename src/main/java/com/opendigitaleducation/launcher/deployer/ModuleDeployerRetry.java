@@ -1,6 +1,7 @@
 package com.opendigitaleducation.launcher.deployer;
 
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -21,11 +22,11 @@ public class ModuleDeployerRetry implements ModuleDeployer {
     }
 
     private Future<Void> timer() {
-        final Future<Void> future = Future.future();
+        final Promise<Void> future = Promise.promise();
         vertx.setTimer(retryDelay, resTime -> {
             future.complete();
         });
-        return future;
+        return (Future) Promise.promise().future();
     }
 
     @Override

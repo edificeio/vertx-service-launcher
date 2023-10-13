@@ -25,7 +25,7 @@ public abstract class ConfigBuilder {
                 final JsonObject serviceJson = (JsonObject) serviceObject;
                 final String[] keys = serviceJson.getString("Key", "").split("/");
                 final String key = keys[keys.length - 1];
-                if (servicesMerged.containsKey(key) && ConfigProviderConsul.countDeploy == 1) {
+                if (servicesMerged.containsKey(key)) {
                     log.info("Overriding application : " + key);
                 }
                 servicesMerged.put(key, serviceJson);

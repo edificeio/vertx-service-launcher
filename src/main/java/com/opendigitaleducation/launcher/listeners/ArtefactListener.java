@@ -2,9 +2,6 @@ package com.opendigitaleducation.launcher.listeners;
 
 import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
-import com.opendigitaleducation.launcher.config.ConfigProviderConsul;
-import com.opendigitaleducation.launcher.config.ConfigProviderMemory;
-import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
