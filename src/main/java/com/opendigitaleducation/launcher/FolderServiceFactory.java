@@ -13,6 +13,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Collections;
 import java.util.Scanner;
+import java.util.concurrent.Callable;
 
 public class FolderServiceFactory extends ServiceVerticleFactory {
 
@@ -31,8 +32,8 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
         this.serviceResolver.init(vertx, servicesPath);
     }
 
-    //TODO JBER migv4 @Override
-    public void resolve(String id, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<String> resolution) {
+    @Override
+    public void createVerticle(String id, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution) {
         if (id == null || !id.startsWith(prefix())) {
             resolution.fail("Invalid identifier : " + id);
             return;
@@ -67,7 +68,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
 		});
     }
 
-    private void deploy(String identifier, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<String> resolution, String[] artifact, String servicePath) {
+    private void deploy(String identifier, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution, String[] artifact, String servicePath) {
         vertx.fileSystem().readFile(servicePath + "META-INF" + File.separator + "MANIFEST.MF", ar -> {
 			if (ar.succeeded()) {
                 Scanner s = new Scanner(ar.result().toString());
@@ -83,7 +84,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                             try {
                                 URLClassLoader urlClassLoader = new URLClassLoader(
                                     new URL[]{new URL("file://" + servicePath )}, classLoader);
-                                //FolderServiceFactory.super.resolve(id, deploymentOptions, urlClassLoader, resolution);
+                                FolderServiceFactory.super.createVerticle(id, deploymentOptions, urlClassLoader, resolution);
                             } catch (MalformedURLException e) {
                                 resolution.fail(e);
                             }
