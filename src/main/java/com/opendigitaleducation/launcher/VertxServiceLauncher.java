@@ -3,7 +3,6 @@ package com.opendigitaleducation.launcher;
 import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
 import com.opendigitaleducation.launcher.config.ConfigProviderListenerAssets;
-import com.opendigitaleducation.launcher.config.ConfigProviderListenerConsulCDN;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
 import com.opendigitaleducation.launcher.listeners.ArtefactListener;
 import com.opendigitaleducation.launcher.utils.FileUtils;
@@ -45,7 +44,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
                 return deployer.deployAll(resConfig.getServicesToDeploy());
             }).compose(deploy -> {
                 return deployer.restartAll(resConfig.getServicesToRestart());
-            }).setHandler(res -> {
+            }).onComplete(res -> {
                 log.info(String.format("End deployment %s: (deployed=%s, undeployed=%s, restart=%s)", count, resConfig.getServicesToDeploy().size(), resConfig.getServicesToUndeploy().size(), resConfig.getServicesToRestart().size()));
                 if (res.succeeded()) {
                     resConfig.end(true);
@@ -68,8 +67,7 @@ public class VertxServiceLauncher extends AbstractVerticle {
             configProvider.addListener(new ConfigProviderListenerAssets());
         }
         if(config().getBoolean("consulCdnEnabled", false)) {
-            final String servicesPath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
-            configProvider.addListener(new ConfigProviderListenerConsulCDN(config(), vertx, servicesPath));
+            throw new RuntimeException("consul.not.implemented");
         }
         configProvider.onConfigChange(resConfig -> {
             onChangeEvent(resConfig, clean || resConfig.isForceClean());
