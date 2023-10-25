@@ -26,7 +26,7 @@ public class ModuleDeployerRetry implements ModuleDeployer {
         vertx.setTimer(retryDelay, resTime -> {
             future.complete();
         });
-        return future.future();
+        return (Future) Promise.promise().future();
     }
 
     @Override
