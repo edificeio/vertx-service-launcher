@@ -10,7 +10,7 @@ LABEL maintainer="Damien BOISSIN <damien.boissin@edifice.io>"
 
 ARG JAR_FILE
 COPY --from=builder /opt/vertx-service-launcher/target/${JAR_FILE} /opt/
-RUN wget -O /opt/java/openjdk/lib/ext/bcprov-jdk15on-160.jar https://www.bouncycastle.org/download/bcprov-jdk15on-160.jar && echo "security.provider.10=org.bouncycastle.jce.provider.BouncyCastleProvider" >> /opt/java/openjdk/lib/security/java.security
+RUN wget -O /opt/java/openjdk/lib/ext/bcprov-jdk15on-160.jar https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk15on/1.60/bcprov-jdk15on-1.60.jar && echo "security.provider.10=org.bouncycastle.jce.provider.BouncyCastleProvider" >> /opt/java/openjdk/lib/security/java.security
 RUN ln -s /opt/${JAR_FILE} /opt/vertx-service-launcher.jar && groupadd vertx && useradd -u 1000 -g 1000 -m vertx && mkdir /srv/springboard && mkdir /srv/storage && chown -R vertx:vertx /srv
 
 USER vertx

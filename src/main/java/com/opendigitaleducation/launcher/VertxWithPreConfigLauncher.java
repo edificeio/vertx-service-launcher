@@ -4,6 +4,7 @@ import io.vertx.core.Launcher;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.micrometer.MicrometerMetricsOptions;
+import io.vertx.micrometer.impl.VertxMetricsFactoryImpl;
 
 /**
  * Vertx launcher that allows for the customization of the instance of vertx
@@ -30,7 +31,11 @@ public class VertxWithPreConfigLauncher extends Launcher {
     @Override
     public void beforeStartingVertx(VertxOptions options) {
         if(metricsOptions != null) {
-            options.setMetricsOptions(new MicrometerMetricsOptions(metricsOptions));
+            final MicrometerMetricsOptions metricsOptionsObj = new MicrometerMetricsOptions(metricsOptions);
+            if(metricsOptionsObj.getFactory() == null) {
+                metricsOptionsObj.setFactory(new VertxMetricsFactoryImpl());
+            }
+            options.setMetricsOptions(metricsOptionsObj);
         }
         super.beforeStartingVertx(options);
     }
