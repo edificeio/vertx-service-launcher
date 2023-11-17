@@ -25,17 +25,17 @@
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-core</artifactId>
-            <version>${vertx.version}</version>
+            <version>${vertxVersion}</version>
         </dependency>
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-service-factory</artifactId>
-            <version>${vertx.version}</version>
+            <version>${vertxVersion}</version>
         </dependency>
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-unit</artifactId>
-            <version>${vertx.version}</version>
+            <version>${vertxVersion}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -90,7 +90,7 @@
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-micrometer-metrics</artifactId>
-            <version>${vertx.version}</version>
+            <version>${vertxVersion}</version>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
