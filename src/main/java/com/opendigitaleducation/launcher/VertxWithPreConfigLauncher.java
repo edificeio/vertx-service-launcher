@@ -43,6 +43,7 @@ public class VertxWithPreConfigLauncher extends Launcher {
         }
         logger.info("maxWorkerPoolSize is " + options.getWorkerPoolSize());
         options.setWorkerPoolSize(workerPoolSize);
+        logger.info("maxWorkerPoolSize is now " + options.getWorkerPoolSize());
         super.beforeStartingVertx(options);
     }
 

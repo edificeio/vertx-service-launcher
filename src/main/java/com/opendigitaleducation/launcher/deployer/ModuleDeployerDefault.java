@@ -91,8 +91,16 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             config.put("address", node + address);
         }
         final DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(config)
-                .setWorker(service.getBoolean("worker", false)).setInstances(config.getInteger("instances", 1))
-                ;// TODO JBER check .setMultiThreaded(service.getBoolean("multi-threaded", false));
+                .setWorker(service.getBoolean("worker", false))
+                .setInstances(config.getInteger("instances", 1));
+        if(config.containsKey("workerPoolSize")) {
+            deploymentOptions.setWorkerPoolSize(config.getInteger("workerPoolSize"));
+            log.info("Setting worker pool size to " + deploymentOptions.getWorkerPoolSize());
+        }
+        if(config.containsKey("workerPoolName")) {
+            deploymentOptions.setWorkerPoolName(config.getString("workerPoolName"));
+            log.info("Setting worker pool name to " + deploymentOptions.getWorkerPoolSize());
+        }
         // register extension
         ExtensionRegistry.register(ModuleDeployer.getServiceIdQuietly(service), service);
         // custom deployer
