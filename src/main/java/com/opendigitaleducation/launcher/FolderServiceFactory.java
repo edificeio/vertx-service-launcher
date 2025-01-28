@@ -83,8 +83,9 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                         String [] item = line.split(":");
                         if (item.length == 3) {
                             id = item[2];
-                            deploymentOptions.setExtraClasspath(Collections.singletonList(servicePath));
-                            deploymentOptions.setIsolationGroup("__vertx_folder_" + artifact[1]);
+                            // TODO java 21 check implications
+                            //deploymentOptions.setExtraClasspath(Collections.singletonList(servicePath));
+                            //deploymentOptions.setIsolationGroup("__vertx_folder_" + artifact[1]);
                             try {
                                 URLClassLoader urlClassLoader = new URLClassLoader(
                                     new URL[]{new URL("file://" + servicePath )}, classLoader);

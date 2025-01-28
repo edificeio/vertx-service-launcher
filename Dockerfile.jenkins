@@ -1,11 +1,11 @@
-FROM maven:3.9.3-eclipse-temurin-8-focal as builder
+FROM maven:3.9.9-eclipse-temurin-21 as builder
 WORKDIR /opt/vertx-service-launcher
 COPY pom.xml .
 COPY ./src ./src
 COPY ./migration ./migration
 RUN mvn clean install -Dmaven.test.skip=true -DskipMavenDockerBuild
 
-FROM eclipse-temurin:8-jre-focal
+FROM eclipse-temurin:21-jre-alpine
 LABEL maintainer="Damien BOISSIN <damien.boissin@edifice.io>"
 
 ARG JAR_FILE
