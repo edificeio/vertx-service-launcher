@@ -87,8 +87,15 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                             //deploymentOptions.setExtraClasspath(Collections.singletonList(servicePath));
                             //deploymentOptions.setIsolationGroup("__vertx_folder_" + artifact[1]);
                             try {
+                                File dir = new File(servicePath);
+                                if (!dir.exists() || !dir.isDirectory()) {
+                                    throw new IllegalArgumentException("Invalid directory path: " + servicesPath);
+                                }
+
+                                URL dirUrl = dir.toURI().toURL();
                                 URLClassLoader urlClassLoader = new URLClassLoader(
-                                    new URL[]{new URL("file://" + servicePath )}, classLoader);
+                                    new URL[]{dirUrl}, classLoader);
+                                deploymentOptions.setClassLoader(urlClassLoader);
                                 FolderServiceFactory.super.createVerticle(id, deploymentOptions, urlClassLoader, resolution);
                             } catch (MalformedURLException e) {
                                 logger.error("Error while trying to deploy " + identifier, e);
