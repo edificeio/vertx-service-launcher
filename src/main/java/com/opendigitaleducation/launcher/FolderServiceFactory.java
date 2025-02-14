@@ -7,6 +7,8 @@ import com.opendigitaleducation.launcher.utils.ZipUtils;
 import io.vertx.core.*;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import io.vertx.service.ServiceVerticleFactory;
 
 import java.io.File;
@@ -36,7 +38,32 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
     }
 
     @Override
-    public void createVerticle(String id, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution) {
+    public void createVerticle(String verticleName, ClassLoader classLoader, Promise<Callable<Verticle>> promise) {
+        final DeploymentOptions deploymentOptions = new DeploymentOptions();
+        final JsonArray services = vertx.getOrCreateContext().config().getJsonArray("services");
+        services.stream()
+            .filter(s -> verticleName.endsWith(((JsonObject)s).getString("name")))
+            .map(s -> (JsonObject)s)
+            .forEach(s -> {
+                if(s.containsKey("worker")) {
+                    deploymentOptions.setWorker(s.getBoolean("worker", false));
+                }
+                if(s.containsKey("threadingModel")) {
+                    deploymentOptions.setThreadingModel(ThreadingModel.valueOf(s.getString("threadingModel", ThreadingModel.EVENT_LOOP.name())));
+                }
+                if(s.containsKey("workerPoolSize")) {
+                    deploymentOptions.setWorkerPoolSize(s.getInteger("workerPoolSize"));
+                }
+                if(s.containsKey("workerPoolName")) {
+                    deploymentOptions.setWorkerPoolName(s.getString("workerPoolName"));
+                }
+            });
+
+        createVerticle(verticleName, deploymentOptions, classLoader, promise);
+    }
+
+    @Override
+    protected void createVerticle(String id, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution) {
         if (id == null || !id.startsWith(prefix())) {
             resolution.fail("Invalid identifier : " + id);
             return;
@@ -47,7 +74,6 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
            resolution.fail("Invalid artifact : " + identifier);
            return;
         }
-
         final String servicePath = servicesPath + File.separator +
             identifier + File.separator;
         vertx.fileSystem().exists(servicePath, ar -> {
