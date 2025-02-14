@@ -16,7 +16,7 @@ pipeline {
     }
     stage('Publish') {
       steps {
-        sh 'mvn deploy'
+        // sh 'mvn deploy'
         sh '''
           export jarFile=`ls target/vertx-service-launcher-*-fat.jar`
           export jarVersion=`echo $jarFile | sed 's|target/vertx-service-launcher-||' | sed 's/-fat.jar//'`
