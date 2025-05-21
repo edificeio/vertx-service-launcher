@@ -5,7 +5,6 @@ import com.opendigitaleducation.launcher.config.ConfigProvider;
 import com.opendigitaleducation.launcher.config.ConfigProviderListenerAssets;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
 import com.opendigitaleducation.launcher.listeners.ArtefactListener;
-import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;

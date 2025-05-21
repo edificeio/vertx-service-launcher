@@ -1,7 +1,10 @@
 package com.opendigitaleducation.launcher.config;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.vertx.core.Handler;
@@ -25,7 +28,24 @@ public class ConfigProviderMemory implements ConfigProvider {
             log.error("Missing services to deploy.");
             return this;
         }
-        handler.handle(new ConfigChangeEventMemory(config, services));
+
+        final JsonArray deployableServices;
+        final List<String> enabledServices = Optional.ofNullable(System.getenv("ENABLED_SERVICES"))
+                .map(x -> Arrays.asList(x.split(",")))
+                .orElse(Collections.emptyList());
+        if (!enabledServices.isEmpty()) {
+            deployableServices = new JsonArray();
+            services.stream()
+                .filter(x -> {
+                    final String serviceName = ((JsonObject) x).getString("name");
+                    return enabledServices.contains(serviceName.substring(0, serviceName.lastIndexOf("~")));
+                })
+                .forEach(deployableServices::add);
+        } else {
+            deployableServices = services;
+        }
+
+        handler.handle(new ConfigChangeEventMemory(config, deployableServices));
         return this;
     }
 
