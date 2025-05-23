@@ -45,6 +45,10 @@ public class ConfigProviderMemory implements ConfigProvider {
             deployableServices = services;
         }
 
+        if (log.isDebugEnabled()) {
+            log.debug("Deployable services : " + deployableServices.encodePrettily());
+        }
+
         handler.handle(new ConfigChangeEventMemory(config, deployableServices));
         return this;
     }

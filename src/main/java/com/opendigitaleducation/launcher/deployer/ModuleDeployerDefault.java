@@ -3,21 +3,29 @@ package com.opendigitaleducation.launcher.deployer;
 import static com.opendigitaleducation.launcher.FolderServiceFactory.FACTORY_PREFIX;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
+
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException.NodeExistsException;
 
 import com.opendigitaleducation.launcher.hooks.Hook;
 import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 
 import io.vertx.core.*;
+import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.LocalMap;
+import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
 
+import static java.lang.String.format;
 public class ModuleDeployerDefault implements ModuleDeployer {
     private final Hook hook;
     private final String assetPath;
@@ -51,6 +59,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         // metrics options
         metricsOptions = config.getJsonObject("metricsOptions");
         // cluster flag
+        // TODO change LocalMap to AsyncMap
         final LocalMap<Object, Object> serverMap = vertx.sharedData().getLocalMap("server");
         cluster = config.getBoolean("cluster", false);
         serverMap.put("cluster", cluster);
@@ -118,10 +127,11 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             });
             return promise.future();
         }
-        //
+
         vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
             if (ar.succeeded()) {
                 log.info("Mod has been deployed successfully : " + name);
+                serviceRegistration(vertx, name, deploymentOptions.getConfig());
                 addAppVersion(name, ar.result(), servicePath);
                 promise.complete();
                 hook.emit(service, Hook.HookEvents.Deployed);
@@ -132,6 +142,96 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         });
         return promise.future();
     }
+
+    // TODO isolate in class
+    private static void serviceRegistration(Vertx vertx, String name, JsonObject config) {
+        if (!vertx.isClustered() ||  !(((VertxInternal) vertx).getClusterManager() instanceof ZookeeperClusterManager)) {
+            return;
+        }
+
+        final ZookeeperClusterManager zookeeperClusterManager =
+                (ZookeeperClusterManager) ((VertxInternal) vertx).getClusterManager();
+        log.info("node id : " + zookeeperClusterManager.getNodeId());
+        log.info("node info : " + zookeeperClusterManager.getNodeInfo());
+
+        final Integer port = config.getInteger("port");
+        if (port == null) {
+            return;
+        }
+        final String router = zookeeperClusterManager.getConfig().getString("rootPath", "vertx");
+        final String serviceName = name.split("\\~")[1];
+        final String pathPrefix = getPathPrefix(config);
+
+        try {
+            traefikServiceRegistration(zookeeperClusterManager, router, serviceName, pathPrefix, port, false);
+        } catch (Exception e) {
+            log.error("Error in traefik service registration on module : " + name, e);
+        }
+    }
+
+    public static void traefikServiceRegistration(ZookeeperClusterManager zookeeperClusterManager,
+            String router, String serviceName, String pathPrefix, int port, boolean tls) throws Exception {
+        final CuratorFramework curatorFramework = zookeeperClusterManager.getCuratorFramework();
+        final byte[] instanceUrl = getInstanceUrl(tls, zookeeperClusterManager.getNodeInfo().host(), port, pathPrefix)
+                .getBytes(StandardCharsets.UTF_8);
+
+        int i = 0;
+        boolean instanceLbCreated = false;
+        while (!instanceLbCreated) {
+             try {
+                final String path = format("/traefik/http/services/%s/loadbalancer/servers/%d/url",
+                    serviceName, i);
+                curatorFramework.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL)
+                        .forPath(path, instanceUrl);
+                instanceLbCreated = true;
+            } catch (NodeExistsException e) {
+                i++;
+            }
+        }
+
+        try {
+            curatorFramework.create().creatingParentsIfNeeded().forPath(
+                format("/traefik/http/services/%s/loadbalancer/healthcheck/path", serviceName),
+                format("%s/monitoring", pathPrefix).getBytes(StandardCharsets.UTF_8));
+        } catch (NodeExistsException e) {
+            log.debug("Health check path already created", e);
+        }
+        try {
+            curatorFramework.create().creatingParentsIfNeeded().forPath(
+                format("/traefik/http/routers/%s/rule", router),
+                format("PathPrefix(`%s`)", pathPrefix).getBytes(StandardCharsets.UTF_8));
+        } catch (NodeExistsException e) {
+            log.debug("Router path already created", e);
+        }
+        try {
+            curatorFramework.create().creatingParentsIfNeeded().forPath(
+                format("/traefik/http/routers/%s/service", router),
+                serviceName.getBytes(StandardCharsets.UTF_8));
+        } catch (NodeExistsException e) {
+            log.debug("Service path already created", e);
+        }
+        curatorFramework.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL)
+                .forPath(format("/traefik/%s-%s", router, zookeeperClusterManager.getNodeId()),
+                instanceUrl);
+    }
+
+    private static String getInstanceUrl(boolean tls, String ip, int port, String pathPrefix) {
+        return format("http%s://%s:%d%s", tls ? "s":"", ip, port, pathPrefix);
+    }
+
+    public static String getPathPrefix(JsonObject config) {
+		String path = config.getString("path-prefix");
+		if (path == null) {
+			final String verticle = config.getString("main");
+			if (verticle != null && !verticle.trim().isEmpty() && verticle.contains(".")) {
+				path = verticle.substring(verticle.lastIndexOf('.') + 1).toLowerCase();
+			}
+		}
+		if ("".equals(path) || "/".equals(path)) {
+			return "";
+		}
+		return "/" + path;
+	}
 
     @Override
     public Future<Void> undeploy(JsonObject service) {

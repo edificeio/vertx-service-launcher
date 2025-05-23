@@ -5,6 +5,7 @@ import com.opendigitaleducation.launcher.utils.FileUtils;
 import com.opendigitaleducation.launcher.utils.ZipUtils;
 
 import io.vertx.core.*;
+import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
 import io.vertx.core.json.JsonArray;
@@ -115,6 +116,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                                 URLClassLoader urlClassLoader = new URLClassLoader(
                                     new URL[]{new URL("file://" + servicePath )}, classLoader);
                                 FolderServiceFactory.super.createVerticle(id, deploymentOptions, urlClassLoader, resolution);
+                                // resolution.future().onSuccess(cv -> cv.call().getVertx().getOrCreateContext().config());
                             } catch (MalformedURLException e) {
                                 logger.error("Error while trying to deploy " + identifier, e);
                                 resolution.fail(e);
