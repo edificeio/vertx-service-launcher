@@ -6,27 +6,42 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
 
+import com.opendigitaleducation.launcher.discovery.ServiceDiscovery;
+import com.opendigitaleducation.launcher.discovery.ServiceInfo;
 import com.opendigitaleducation.launcher.hooks.Hook;
 import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 
 import io.vertx.core.*;
 import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
+import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.LocalMap;
+import io.vertx.core.spi.cluster.NodeInfo;
+import io.vertx.core.spi.cluster.NodeListener;
 import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
 
 import static java.lang.String.format;
 public class ModuleDeployerDefault implements ModuleDeployer {
+    private static final String DEPENDS = "depends";
+    private static final String NOTIFY_DEPLOYMENT_ADDRESS = "vertx-module-deployment";
+    /** Entry keys of MANIFEST.MF file of deployed modules that should be used to populate detailed version metadata.*/
+    private static final Map<String, String> manifestKeysForVersion;
+    private static final Logger log = LoggerFactory.getLogger(ModuleDeployerDefault.class);
+
     private final Hook hook;
     private final String assetPath;
     private final boolean cluster;
@@ -36,13 +51,11 @@ public class ModuleDeployerDefault implements ModuleDeployer {
     private final String absoluteServicePath;
     private final JsonObject metricsOptions;
     private CustomDeployerManager customDeployer;
-    private final LocalMap<String, String> versionMap;
+    private AsyncMap<String, String> versionMap;
     /** Map holding useful metadata about deployed modules. */
-    private final LocalMap<String, JsonObject> detailedVersionMap;
+    private AsyncMap<String, JsonObject> detailedVersionMap;
     private final LocalMap<String, String> deploymentsIdMap;
-    /** Entry keys of MANIFEST.MF file of deployed modules that should be used to populate detailed version metadata.*/
-    private static final Map<String, String> manifestKeysForVersion;
-    private static Logger log = LoggerFactory.getLogger(ModuleDeployerDefault.class);
+    private final ServiceDiscovery serviceDiscovery;
 
     static {
         final Map<String, String> map = new HashMap<>();
@@ -59,7 +72,6 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         // metrics options
         metricsOptions = config.getJsonObject("metricsOptions");
         // cluster flag
-        // TODO change LocalMap to AsyncMap
         final LocalMap<Object, Object> serverMap = vertx.sharedData().getLocalMap("server");
         cluster = config.getBoolean("cluster", false);
         serverMap.put("cluster", cluster);
@@ -68,12 +80,20 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         serverMap.put("node", node);
         // maps
         deploymentsIdMap = vertx.sharedData().getLocalMap("deploymentsId");
-        versionMap = vertx.sharedData().getLocalMap("versions");
-        detailedVersionMap = vertx.sharedData().getLocalMap("detailedVersions");
         //
         this.servicesPath = FileUtils.absolutePath(System.getProperty("vertx.services.path"));
         customDeployer = new CustomDeployerManager(vertx, servicesPath, assetPath);
         hook = Hook.create(vertx, config);
+        serviceDiscovery = ServiceDiscovery.create(vertx);
+    }
+
+    @Override
+    public Future<Void> init() {
+        final Future<Void> f1 = vertx.sharedData().<String, String>getAsyncMap("versions")
+            .compose(x -> { versionMap = x; return Future.<Void>succeededFuture(); });
+        final Future<Void> f2 = vertx.sharedData().<String, JsonObject>getAsyncMap("detailedVersions")
+            .compose(x -> { detailedVersionMap = x; return Future.<Void>succeededFuture(); });
+        return Future.all(f1, f2).compose(x -> Future.succeededFuture());
     }
 
     protected String getServicePath(JsonObject service) throws Exception {
@@ -128,10 +148,60 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             return promise.future();
         }
 
+        final JsonArray depends = service.getJsonArray(DEPENDS);
+        if (!vertx.isClustered() || depends == null || depends.isEmpty()) {
+            deployVerticle(service, servicePath, deploymentOptions, promise);
+        } else {
+            deployVerticleAfterDependancies(service, servicePath, deploymentOptions, promise);
+        }
+        return promise.future();
+    }
+
+    private void tryDeployVerticle(JsonObject service, String servicePath,
+            DeploymentOptions deploymentOptions, Promise<Void> promise, AtomicBoolean deploymentLaunched) {
+        if (deploymentLaunched.get()) {
+            return;
+        }
+        try {
+            final List<String> depends = service.getJsonArray(DEPENDS).getList();
+            log.info("depends modules : " + depends);
+            serviceDiscovery.getServicesInfos(depends).onSuccess(services -> {
+                final Set<String> modules = services.keySet();
+                log.info("deployed modules : " + modules);
+                if (modules.containsAll(service.getJsonArray(DEPENDS).getList())) {
+                    if (deploymentLaunched.compareAndSet(false, true)) {
+                        deployVerticle(service, servicePath, deploymentOptions, promise);
+                    }
+                }
+            }).onFailure(ex -> log.error("Error when list deployed modules", ex));
+        }catch (Exception e) {
+            log.error("Error when get keys", e);
+        }
+    }
+
+    private void deployVerticleAfterDependancies(JsonObject service, String servicePath,
+            DeploymentOptions deploymentOptions, Promise<Void> promise) {
+        final AtomicBoolean deploymentLaunched = new AtomicBoolean(false);
+        final JsonArray depends = service.getJsonArray(DEPENDS);
+        vertx.eventBus().<String>consumer(NOTIFY_DEPLOYMENT_ADDRESS, m -> {
+            log.info("receive deployment info : " + m.body());
+            if (depends.contains(m.body())) {
+                tryDeployVerticle(service, servicePath, deploymentOptions, promise, deploymentLaunched);
+            }
+        });
+        tryDeployVerticle(service, servicePath, deploymentOptions, promise, deploymentLaunched);
+    }
+
+    private void deployVerticle(JsonObject service, final String servicePath,
+            final DeploymentOptions deploymentOptions, final Promise<Void> promise) {
+        final String name = service.getString("name");
+        final String moduleKey = ServiceInfo.getServiceName(name);
         vertx.deployVerticle(FACTORY_PREFIX + ":" + name, deploymentOptions, ar -> {
             if (ar.succeeded()) {
                 log.info("Mod has been deployed successfully : " + name);
-                serviceRegistration(vertx, name, deploymentOptions.getConfig());
+                serviceDiscovery.serviceRegistration(name, deploymentOptions.getConfig())
+                    .onSuccess(v -> vertx.eventBus().publish(NOTIFY_DEPLOYMENT_ADDRESS, moduleKey))
+                    .onFailure(ex -> log.error("Error when register service", ex));
                 addAppVersion(name, ar.result(), servicePath);
                 promise.complete();
                 hook.emit(service, Hook.HookEvents.Deployed);
@@ -140,98 +210,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 promise.fail(ar.cause());
             }
         });
-        return promise.future();
     }
-
-    // TODO isolate in class
-    private static void serviceRegistration(Vertx vertx, String name, JsonObject config) {
-        if (!vertx.isClustered() ||  !(((VertxInternal) vertx).getClusterManager() instanceof ZookeeperClusterManager)) {
-            return;
-        }
-
-        final ZookeeperClusterManager zookeeperClusterManager =
-                (ZookeeperClusterManager) ((VertxInternal) vertx).getClusterManager();
-        log.info("node id : " + zookeeperClusterManager.getNodeId());
-        log.info("node info : " + zookeeperClusterManager.getNodeInfo());
-
-        final Integer port = config.getInteger("port");
-        if (port == null) {
-            return;
-        }
-        final String router = zookeeperClusterManager.getConfig().getString("rootPath", "vertx");
-        final String serviceName = name.split("\\~")[1];
-        final String pathPrefix = getPathPrefix(config);
-
-        try {
-            traefikServiceRegistration(zookeeperClusterManager, router, serviceName, pathPrefix, port, false);
-        } catch (Exception e) {
-            log.error("Error in traefik service registration on module : " + name, e);
-        }
-    }
-
-    public static void traefikServiceRegistration(ZookeeperClusterManager zookeeperClusterManager,
-            String router, String serviceName, String pathPrefix, int port, boolean tls) throws Exception {
-        final CuratorFramework curatorFramework = zookeeperClusterManager.getCuratorFramework();
-        final byte[] instanceUrl = getInstanceUrl(tls, zookeeperClusterManager.getNodeInfo().host(), port, pathPrefix)
-                .getBytes(StandardCharsets.UTF_8);
-
-        int i = 0;
-        boolean instanceLbCreated = false;
-        while (!instanceLbCreated) {
-             try {
-                final String path = format("/traefik/http/services/%s/loadbalancer/servers/%d/url",
-                    serviceName, i);
-                curatorFramework.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL)
-                        .forPath(path, instanceUrl);
-                instanceLbCreated = true;
-            } catch (NodeExistsException e) {
-                i++;
-            }
-        }
-
-        try {
-            curatorFramework.create().creatingParentsIfNeeded().forPath(
-                format("/traefik/http/services/%s/loadbalancer/healthcheck/path", serviceName),
-                format("%s/monitoring", pathPrefix).getBytes(StandardCharsets.UTF_8));
-        } catch (NodeExistsException e) {
-            log.debug("Health check path already created", e);
-        }
-        try {
-            curatorFramework.create().creatingParentsIfNeeded().forPath(
-                format("/traefik/http/routers/%s/rule", router),
-                format("PathPrefix(`%s`)", pathPrefix).getBytes(StandardCharsets.UTF_8));
-        } catch (NodeExistsException e) {
-            log.debug("Router path already created", e);
-        }
-        try {
-            curatorFramework.create().creatingParentsIfNeeded().forPath(
-                format("/traefik/http/routers/%s/service", router),
-                serviceName.getBytes(StandardCharsets.UTF_8));
-        } catch (NodeExistsException e) {
-            log.debug("Service path already created", e);
-        }
-        curatorFramework.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL)
-                .forPath(format("/traefik/%s-%s", router, zookeeperClusterManager.getNodeId()),
-                instanceUrl);
-    }
-
-    private static String getInstanceUrl(boolean tls, String ip, int port, String pathPrefix) {
-        return format("http%s://%s:%d%s", tls ? "s":"", ip, port, pathPrefix);
-    }
-
-    public static String getPathPrefix(JsonObject config) {
-		String path = config.getString("path-prefix");
-		if (path == null) {
-			final String verticle = config.getString("main");
-			if (verticle != null && !verticle.trim().isEmpty() && verticle.contains(".")) {
-				path = verticle.substring(verticle.lastIndexOf('.') + 1).toLowerCase();
-			}
-		}
-		if ("".equals(path) || "/".equals(path)) {
-			return "";
-		}
-		return "/" + path;
-	}
 
     @Override
     public Future<Void> undeploy(JsonObject service) {
@@ -335,8 +314,10 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         if (lNameVersion.length == 3) {
             final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
             final String version = lNameVersion[2];
-            versionMap.put(moduleKey, version);
-            deploymentsIdMap.put(moduleName, deploymentId);// use module name in case of multiple mods with different
+            versionMap.put(moduleKey, version)
+                .onFailure(ex -> log.error("Error when put module version", ex));
+            deploymentsIdMap.put(moduleName, deploymentId);
+            // use module name in case of multiple mods with different
                                                            // versions
             // Construct the detailedVersion map by parsing the manifest file of the module and
             // extracting only the desired pieces of information
@@ -358,7 +339,8 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                         }
                     }
                 }
-                detailedVersionMap.put(moduleKey, detailedVersion);
+                detailedVersionMap.put(moduleKey, detailedVersion)
+                    .onFailure(ex -> log.error("Error when put module detailed version", ex));
             });
         }
     }
@@ -367,7 +349,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         final String[] lNameVersion = moduleName.split("~");
         if (lNameVersion.length == 3) {
             final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
-            versionMap.remove(moduleKey, lNameVersion[2]);
+            versionMap.remove(moduleKey).onFailure(ex -> log.error("Error when remove module version", ex));
             detailedVersionMap.remove(moduleKey);
             deploymentsIdMap.remove(moduleName);
         }

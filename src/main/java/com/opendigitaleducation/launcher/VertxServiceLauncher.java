@@ -59,8 +59,15 @@ public class VertxServiceLauncher extends AbstractVerticle {
 
     @Override
     public void start() throws Exception {
-        final Boolean clean = config().getBoolean("clean", true);
         deployer = ModuleDeployer.create(vertx, config());
+        deployer.init()
+            .onSuccess(r -> init())
+            .onFailure(ex -> log.error("Error initializing deployer", ex));
+    }
+
+    public void init() {
+        log.info("init verticle launcher");
+        final Boolean clean = config().getBoolean("clean", true);
         configProvider = ConfigProvider.create(config()).start(vertx, config());
         if(config().getBoolean("redeploy-assets-onclean", true)) {
             configProvider.addListener(new ConfigProviderListenerAssets());

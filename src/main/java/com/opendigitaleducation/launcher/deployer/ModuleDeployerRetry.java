@@ -83,4 +83,9 @@ public class ModuleDeployerRetry implements ModuleDeployer {
         return original.clean(service);
     }
 
+    @Override
+    public Future<Void> init() {
+        return original.init();
+    }
+
 }
