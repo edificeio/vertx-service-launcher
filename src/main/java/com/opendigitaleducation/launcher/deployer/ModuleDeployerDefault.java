@@ -3,7 +3,6 @@ package com.opendigitaleducation.launcher.deployer;
 import static com.opendigitaleducation.launcher.FolderServiceFactory.FACTORY_PREFIX;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -12,10 +11,6 @@ import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.KeeperException.NodeExistsException;
-
 import com.opendigitaleducation.launcher.discovery.ServiceDiscovery;
 import com.opendigitaleducation.launcher.discovery.ServiceInfo;
 import com.opendigitaleducation.launcher.hooks.Hook;
@@ -23,18 +18,12 @@ import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 
 import io.vertx.core.*;
-import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.core.shareddata.LocalMap;
-import io.vertx.core.spi.cluster.NodeInfo;
-import io.vertx.core.spi.cluster.NodeListener;
-import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
-
-import static java.lang.String.format;
 public class ModuleDeployerDefault implements ModuleDeployer {
     private static final String DEPENDS = "depends";
     private static final String NOTIFY_DEPLOYMENT_ADDRESS = "vertx-module-deployment";
@@ -72,12 +61,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         // metrics options
         metricsOptions = config.getJsonObject("metricsOptions");
         // cluster flag
-        final LocalMap<Object, Object> serverMap = vertx.sharedData().getLocalMap("server");
-        cluster = config.getBoolean("cluster", false);
-        serverMap.put("cluster", cluster);
+        cluster = vertx.isClustered();
         // node flag
         node = config.getString("node", "");
-        serverMap.put("node", node);
         // maps
         deploymentsIdMap = vertx.sharedData().getLocalMap("deploymentsId");
         //
@@ -93,7 +79,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             .compose(x -> { versionMap = x; return Future.<Void>succeededFuture(); });
         final Future<Void> f2 = vertx.sharedData().<String, JsonObject>getAsyncMap("detailedVersions")
             .compose(x -> { detailedVersionMap = x; return Future.<Void>succeededFuture(); });
-        return Future.all(f1, f2).compose(x -> Future.succeededFuture());
+        final Future<Void> f3 = vertx.sharedData().<String, Object>getAsyncMap("server")
+            .compose(x -> x.put("node", node));
+        return Future.all(f1, f2, f3).compose(x -> Future.succeededFuture());
     }
 
     protected String getServicePath(JsonObject service) throws Exception {

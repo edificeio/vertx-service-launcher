@@ -52,20 +52,19 @@ public class DefaultServiceDiscovery implements ServiceDiscovery {
         zookeeperClusterManager.setNodeInfo(new NodeInfo(nodeInfo.host(), nodeInfo.port(), new JsonObject()
                 .put("service", serviceInfo.getName())), setNodeInfoPromise);
 
-        return setNodeInfoPromise.future().compose(x -> {
-            return vertx.sharedData().<String, List<ServiceInfo>>getAsyncMap("services").compose(services -> {
-                final List<ServiceInfo> serviceIds = new ArrayList<>();
-                serviceIds.add(serviceInfo);
-                return services.putIfAbsent(serviceInfo.getName(), serviceIds)
-                    .compose(res -> {
-                        if (res != null) {
-                            return appendAndFilterServiceIds(services, serviceInfo, res, 0);
-                        } else {
-                            return Future.succeededFuture(serviceInfo);
-                        }
-                    });
-            });
-        });
+        return setNodeInfoPromise.future().compose(x -> vertx.sharedData().<String, List<ServiceInfo>>getAsyncMap("services"))
+                .compose(services -> {
+                    final List<ServiceInfo> serviceIds = new ArrayList<>();
+                    serviceIds.add(serviceInfo);
+                    return services.putIfAbsent(serviceInfo.getName(), serviceIds)
+                        .compose(res -> {
+                            if (res != null) {
+                                return appendAndFilterServiceIds(services, serviceInfo, res, 0);
+                            } else {
+                                return Future.succeededFuture(serviceInfo);
+                            }
+                        });
+                });
     }
 
     private Future<ServiceInfo> appendAndFilterServiceIds(AsyncMap<String, List<ServiceInfo>> services,
@@ -108,11 +107,13 @@ public class DefaultServiceDiscovery implements ServiceDiscovery {
 
     @Override
     public Future<List<ServiceInfo>> getServiceInfos(String service) {
-        return vertx.sharedData().<String, List<ServiceInfo>>getAsyncMap("services").compose(services ->
-            services.get(service).compose(infos -> Future.succeededFuture(
-                Optional.ofNullable(infos).orElse(Collections.emptyList()).stream().filter(x ->
-                    zookeeperClusterManager.getNodes().contains(x.getNodeId())).collect(Collectors.toList())))
-        );
+        return vertx.sharedData().<String, List<ServiceInfo>>getAsyncMap("services")
+                .compose(services -> services.get(service))
+                .compose(infos -> Future.succeededFuture(
+                    Optional.ofNullable(infos).orElse(Collections.emptyList()).stream()
+                        .filter(x -> zookeeperClusterManager.getNodes().contains(x.getNodeId()))
+                        .collect(Collectors.toList()))
+                );
     }
 
 }
