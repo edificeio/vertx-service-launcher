@@ -19,10 +19,10 @@ public class ServiceInfo implements Serializable {
 
     public ServiceInfo(String moduleName, String router, String ip, String nodeId, JsonObject config) {
         name = getServiceName(moduleName);
-        this.router = router;
+        this.router = router + "." + name;
         this.ip = ip;
         this.nodeId = nodeId;
-        if (config != null && config.getInteger("port") != null) {
+        if (config != null && config.getInteger("port") != null && config.getBoolean("http-service", true)) {
             this.pathPrefix = getPathPrefix(config);
             this.port = config.getInteger("port");
             this.url = getInstanceUrl(false, ip, port, pathPrefix);
@@ -53,7 +53,7 @@ public class ServiceInfo implements Serializable {
 			}
 		}
 		if ("".equals(path) || "/".equals(path)) {
-			return "";
+			return "/";
 		}
 		return "/" + path;
 	}

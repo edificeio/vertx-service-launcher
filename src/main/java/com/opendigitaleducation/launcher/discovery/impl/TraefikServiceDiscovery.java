@@ -50,7 +50,8 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
             try {
                 curatorFramework.create().creatingParentsIfNeeded().forPath(
                     format("/traefik/http/services/%s/loadbalancer/healthcheck/path", serviceInfo.getName()),
-                    format("%s/monitoring", serviceInfo.getPathPrefix()).getBytes(StandardCharsets.UTF_8));
+                    format("%s/monitoring", "/".equals(serviceInfo.getPathPrefix())
+                        ? "" : serviceInfo.getPathPrefix()).getBytes(StandardCharsets.UTF_8));
             } catch (NodeExistsException e) {
                 log.debug("Health check path already created", e);
             }
