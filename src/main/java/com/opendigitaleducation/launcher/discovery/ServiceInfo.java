@@ -8,6 +8,8 @@ import io.vertx.core.json.JsonObject;
 
 public class ServiceInfo implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+
     private final String nodeId;
     private final String name;
     private final String router;
@@ -16,6 +18,7 @@ public class ServiceInfo implements Serializable {
     private final Integer port;
     private final String url;
     private final boolean httpService;
+    private final String healthcheck;
 
     public ServiceInfo(String moduleName, String router, String ip, String nodeId, JsonObject config) {
         name = getServiceName(moduleName);
@@ -27,12 +30,27 @@ public class ServiceInfo implements Serializable {
             this.port = config.getInteger("port");
             this.url = getInstanceUrl(false, ip, port, pathPrefix);
             this.httpService = true;
+            this.healthcheck = ("/".equals(pathPrefix) ? "" : pathPrefix) + "/monitoring";
         } else {
             this.pathPrefix = null;
             this.port = null;
             this.url = null;
             this.httpService = false;
+            this.healthcheck = null;
         }
+    }
+
+    public ServiceInfo(String moduleName, String router, String ip, Integer port,
+            String pathPrefix, String nodeId, boolean httpService, String healthcheck) {
+        name = getServiceName(moduleName);
+        this.router = router;
+        this.ip = ip;
+        this.port = port;
+        this.pathPrefix = pathPrefix;
+        this.nodeId = nodeId;
+        this.httpService = httpService;
+        this.url = getInstanceUrl(false, ip, port, pathPrefix);
+        this.healthcheck = healthcheck;
     }
 
     public static String getInstanceUrl(boolean tls, String ip, int port, String pathPrefix) {
@@ -88,6 +106,10 @@ public class ServiceInfo implements Serializable {
 
     public boolean isHttpService() {
         return httpService;
+    }
+
+    public String getHealthcheck() {
+        return healthcheck;
     }
 
 }

@@ -50,8 +50,7 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
             try {
                 curatorFramework.create().creatingParentsIfNeeded().forPath(
                     format("/traefik/http/services/%s/loadbalancer/healthcheck/path", serviceInfo.getName()),
-                    format("%s/monitoring", "/".equals(serviceInfo.getPathPrefix())
-                        ? "" : serviceInfo.getPathPrefix()).getBytes(StandardCharsets.UTF_8));
+                    serviceInfo.getHealthcheck().getBytes(StandardCharsets.UTF_8));
             } catch (NodeExistsException e) {
                 log.debug("Health check path already created", e);
             }
@@ -72,6 +71,15 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
             curatorFramework.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL)
                     .forPath(format("/traefik/%s-%s", serviceInfo.getRouter(), zookeeperClusterManager.getNodeId()),
                     instanceUrl);
+
+            // Userbook hack
+            if ("org.entcore.directory".equals(serviceInfo.getName())) {
+                traefikServiceRegistration(new ServiceInfo(
+                    "org.entcore~userbook~version",
+                    serviceInfo.getRouter().replaceAll("directory", "userbook"),
+                    serviceInfo.getIp(), serviceInfo.getPort(), "/userbook",
+                    serviceInfo.getNodeId(), serviceInfo.isHttpService(), serviceInfo.getHealthcheck()));
+            }
             promise.complete(serviceInfo);
         } catch (Exception e) {
             promise.fail(e);
