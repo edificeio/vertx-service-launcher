@@ -57,7 +57,8 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
             try {
                 curatorFramework.create().creatingParentsIfNeeded().forPath(
                     format("/traefik/http/routers/%s/rule", serviceInfo.getRouter()),
-                    format("PathPrefix(`%s`)", serviceInfo.getPathPrefix()).getBytes(StandardCharsets.UTF_8));
+                    format("Path(`%s`) || PathPrefix(`%s/`)", serviceInfo.getPathPrefix(), serviceInfo.getPathPrefix())
+                            .getBytes(StandardCharsets.UTF_8));
             } catch (NodeExistsException e) {
                 log.debug("Router path already created", e);
             }
