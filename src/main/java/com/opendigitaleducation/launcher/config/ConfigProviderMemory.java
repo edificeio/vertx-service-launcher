@@ -24,7 +24,7 @@ public class ConfigProviderMemory implements ConfigProvider {
     @Override
     public ConfigProvider onConfigChange(Handler<ConfigChangeEvent> handler) {
         final JsonArray services = config.getJsonArray("services", new JsonArray());
-        if (services.size() == 0) {
+        if (services.isEmpty()) {
             log.error("Missing services to deploy.");
             return this;
         }
@@ -58,7 +58,7 @@ public class ConfigProviderMemory implements ConfigProvider {
 
     @Override
     public ConfigProvider start(Vertx vertx, JsonObject config) {
-        this.config = config;
+        this.config = valuateConfig(config);
         return this;
     }
 
@@ -71,6 +71,69 @@ public class ConfigProviderMemory implements ConfigProvider {
     @Override
     public ConfigProvider stop(Vertx vertx) {
         return this;
+    }
+
+
+    public static JsonObject valuateConfig(final JsonObject config) {
+        final JsonObject valuated = new JsonObject();
+        config.stream().forEach(entry -> {
+            final String key = entry.getKey();
+            final Object value = entry.getValue();
+            final Object newValue;
+            if (value instanceof String) {
+                newValue = valuateConfig((String) value);
+            } else if(value instanceof JsonObject) {
+                newValue = valuateConfig((JsonObject) value);
+            } else if(value instanceof JsonArray) {
+                newValue = valuateConfig((JsonArray) value);
+            } else {
+                newValue = value;
+            }
+            valuated.put(key, newValue);
+        });
+        return valuated;
+    }
+
+    public static JsonArray valuateConfig(final JsonArray array) {
+        final JsonArray valuated = new JsonArray();
+        array.stream().forEach(value -> {
+            final Object newValue;
+            if (value instanceof String) {
+                newValue = valuateConfig((String) value);
+            } else if(value instanceof JsonObject) {
+                newValue = valuateConfig((JsonObject) value);
+            } else if(value instanceof JsonArray) {
+                newValue = valuateConfig((JsonArray) value);
+            } else {
+                newValue = value;
+            }
+            valuated.add(newValue);
+        });
+        return valuated;
+    }
+
+    public static String valuateConfig(final String config) {
+        // We replace all instances of ${ENV_VAR} with the value of the environment variable ENV_VAR
+        // and ${ENV_VAR:default_value} with the value of the environment variable ENV_VAR or default_value if ENV_VAR is not set
+        // If ${!ENV_VAR} is used, an exception is thrown if ENV_VAR is not set
+        String valuated = config;
+        final String matcher = "\\$\\{(!?)([a-zA-Z0-9_]+)(:([^}]*))?\\}";
+        final java.util.regex.Matcher m = java.util.regex.Pattern.compile(matcher).matcher(config);
+        while (m.find()) {
+            final String envVar = m.group(2);
+            final String defaultValue = m.group(4);
+            final String envValue = System.getenv(envVar);
+            if (envValue != null) {
+                valuated = valuated.replace(m.group(0), envValue);
+            } else if (m.group(1).equals("!")) {
+                throw new IllegalArgumentException("Environment variable " + envVar + " is not set");
+            } else if (defaultValue != null) {
+                valuated = valuated.replace(m.group(0), defaultValue);
+            } else {
+                valuated = valuated.replace(m.group(0), "");
+            }
+        }
+        return valuated;
     }
 
     private static class ConfigChangeEventMemory extends ConfigChangeEvent {
