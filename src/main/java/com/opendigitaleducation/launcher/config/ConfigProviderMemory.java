@@ -31,9 +31,14 @@ public class ConfigProviderMemory implements ConfigProvider {
 
         final JsonArray deployableServices;
         final List<String> enabledServices = Optional.ofNullable(System.getenv("ENABLED_SERVICES"))
-                .map(x -> Arrays.asList(x.split(",")))
-                .orElse(Collections.emptyList());
-        if (!enabledServices.isEmpty()) {
+            .map(x -> Arrays.asList(x.split(",")))
+            .orElse(Collections.emptyList())
+            .stream()
+            .filter(x -> !x.trim().isEmpty())
+            .collect(Collectors.toList());
+        if (enabledServices.isEmpty()) {
+            deployableServices = services;
+        } else {
             deployableServices = new JsonArray();
             services.stream()
                 .filter(x -> {
@@ -41,8 +46,6 @@ public class ConfigProviderMemory implements ConfigProvider {
                     return enabledServices.contains(serviceName.substring(0, serviceName.lastIndexOf("~")));
                 })
                 .forEach(deployableServices::add);
-        } else {
-            deployableServices = services;
         }
 
         if (log.isDebugEnabled()) {
