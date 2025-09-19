@@ -9,7 +9,7 @@ ARCHITECTURE="linux/arm/v7,linux/arm64,linux/amd64"
 
 BRANCH_NAME=`git branch | sed -n -e "s/^\* \(.*\)/\1/p"`
 if [ "$BRANCH_NAME" = "master" ]; then
-    LATEST_TAG="opendigitaleducation/vertx-service-launcher:latest"
+    LATEST_TAG="-t opendigitaleducation/vertx-service-launcher:latest"
 else
     LATEST_TAG=""
 fi
