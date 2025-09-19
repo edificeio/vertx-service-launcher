@@ -1,4 +1,4 @@
-FROM maven:3.9.3-eclipse-temurin-8-focal as builder
+FROM maven:3.9.3-eclipse-temurin-8-focal AS builder
 WORKDIR /opt/vertx-service-launcher
 COPY pom.xml .
 COPY ./src ./src
