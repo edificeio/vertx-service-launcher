@@ -1,10 +1,6 @@
 package com.opendigitaleducation.launcher.config;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import io.vertx.core.Handler;
@@ -36,6 +32,12 @@ public class ConfigProviderMemory implements ConfigProvider {
             .stream()
             .filter(x -> !x.trim().isEmpty())
             .collect(Collectors.toList());
+        final Set<String> disabledServices = Optional.ofNullable(System.getenv("DISABLED_SERVICES"))
+            .map(x -> Arrays.asList(x.split(",")))
+            .orElse(Collections.emptyList())
+            .stream()
+            .filter(x -> !x.trim().isEmpty())
+            .collect(Collectors.toSet());
         if (enabledServices.isEmpty()) {
             deployableServices = services;
         } else {
@@ -47,12 +49,22 @@ public class ConfigProviderMemory implements ConfigProvider {
                 })
                 .forEach(deployableServices::add);
         }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Deployable services : " + deployableServices.encodePrettily());
+        final JsonArray servicesThatRemain;
+        if(disabledServices.isEmpty()) {
+            servicesThatRemain = deployableServices;
+        } else {
+            final List<Object> finalServices = deployableServices.stream().filter(x -> {
+                final String serviceName = ((JsonObject) x).getString("name");
+                return !disabledServices.contains(serviceName.substring(0, serviceName.lastIndexOf("~")));
+            }).collect(Collectors.toList());
+            servicesThatRemain = new JsonArray(finalServices);
         }
 
-        handler.handle(new ConfigChangeEventMemory(config, deployableServices));
+        if (log.isDebugEnabled()) {
+            log.debug("Deployable services : " + servicesThatRemain.encodePrettily());
+        }
+
+        handler.handle(new ConfigChangeEventMemory(config, servicesThatRemain));
         return this;
     }
 
