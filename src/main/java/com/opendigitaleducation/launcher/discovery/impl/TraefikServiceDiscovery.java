@@ -59,12 +59,12 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
                 if("/".equals(pathPrefix) || pathPrefix.isEmpty()) {
                     curatorFramework.create().creatingParentsIfNeeded().forPath(
                         format("/traefik/http/routers/%s/rule", serviceInfo.getRouter()),
-                        format("Path(`%s`)", serviceInfo.getPathPrefix())
+                        "Path(`/`) || PathPrefix(`/`)"
                                 .getBytes(StandardCharsets.UTF_8));
                 } else {
                     curatorFramework.create().creatingParentsIfNeeded().forPath(
                         format("/traefik/http/routers/%s/rule", serviceInfo.getRouter()),
-                        format("Path(`%s`) || PathPrefix(`%s/`)", serviceInfo.getPathPrefix(), serviceInfo.getPathPrefix())
+                        format("Path(`%s`) || PathPrefix(`%s/`)", pathPrefix, pathPrefix)
                                 .getBytes(StandardCharsets.UTF_8));
                 }
             } catch (NodeExistsException e) {
