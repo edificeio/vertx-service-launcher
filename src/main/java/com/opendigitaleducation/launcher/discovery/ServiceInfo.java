@@ -30,7 +30,7 @@ public class ServiceInfo implements Serializable {
             this.port = config.getInteger("port");
             this.url = getInstanceUrl(false, ip, port, pathPrefix);
             this.httpService = true;
-            this.healthcheck = ("/".equals(pathPrefix) ? "" : pathPrefix) + "/monitoring";
+            this.healthcheck = ("/".equals(pathPrefix) ? "" : pathPrefix) + "/health/liveness";
         } else {
             this.pathPrefix = null;
             this.port = null;
