@@ -79,7 +79,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             .compose(x -> { versionMap = x; return Future.<Void>succeededFuture(); });
         final Future<Void> f2 = vertx.sharedData().<String, JsonObject>getAsyncMap("detailedVersions")
             .compose(x -> { detailedVersionMap = x; return Future.<Void>succeededFuture(); });
-        final Future<Void> f3 = vertx.sharedData().<String, Object>getAsyncMap("server")
+        final Future<Void> f3 = vertx.sharedData().<String, Object>getLocalAsyncMap("server")
             .compose(x -> x.put("node", node));
         return Future.all(f1, f2, f3).compose(x -> Future.succeededFuture());
     }

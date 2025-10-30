@@ -63,9 +63,99 @@ public class ConfigProviderMemory implements ConfigProvider {
         if (log.isDebugEnabled()) {
             log.debug("Deployable services : " + servicesThatRemain.encodePrettily());
         }
+        dispatchSharedConfiguration(config);
 
         handler.handle(new ConfigChangeEventMemory(config, servicesThatRemain));
         return this;
+    }
+
+    /**
+     * Takes the configuration located in the global "sharedConf" field and put it in every service.
+     * Note that only first level fields are copied as a whole, we won't recursively explore objects to copy missing
+     * fields (as they might not be missing but just unset for a particular reason).
+     *
+     * Exemple :
+     * If we have<pre>
+     *     "sharedConf": {
+     *     "foo": "foo-value",
+     *     "bar": {
+     *       "innerProp": "inner Prop value",
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   },
+     * "services" : [
+     * {
+     *   "name": "my-service",
+     *   "config":{
+     *     "someProp": "some Value"
+     *   }
+     * },
+     * {
+     *   "name": "other-service",
+     *   "config":{
+     *     "thing": "some gniht",
+     *     "bar": {
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   }
+     * }
+     * </pre>
+     * We will end up with
+     * <pre>
+     *     "services" : [
+     * {
+     *   "name": "my-service",
+     *   "config":{
+     *     "someProp": "some Value",
+     *     "foo": "foo-value",
+     *     "bar": {
+     *       "innerProp": "inner Prop value",
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   }
+     * },
+     * {
+     *   "name": "other-service",
+     *   "config":{
+     *     "thing": "some gniht",
+     *     "foo": "foo-value",
+     *     "bar": {
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   }
+     * }
+     * </pre>
+     * <ul>
+     *     <li>my-service got all the keys from sharedConf</li>
+     *     <li>other-service just got the "foo" field and the field "bar" was not changed (we didn't put bar.innerProd</li>
+     * </ul>
+     * @param globalConfiguration Global configuration
+     */
+    public static void dispatchSharedConfiguration(final JsonObject globalConfiguration) {
+        final JsonObject globalSharedConf = globalConfiguration.getJsonObject("sharedConf");
+        if(globalSharedConf == null) {
+            log.warn("No global shared configuration is set");
+        } else {
+            final JsonArray services = globalConfiguration.getJsonArray("services", new JsonArray());
+            for (Object rawService : services) {
+                final JsonObject service = (JsonObject) rawService;
+                final JsonObject serviceConfig = service.getJsonObject("config");
+                for (Map.Entry<String, Object> sharedConf : globalSharedConf) {
+                    final String sharedConfKey = sharedConf.getKey();
+                    if(!serviceConfig.containsKey(sharedConfKey)) {
+                        serviceConfig.put(sharedConfKey, sharedConf.getValue());
+                    }
+                }
+            }
+        }
     }
 
     @Override
