@@ -17,6 +17,7 @@ import com.opendigitaleducation.launcher.hooks.Hook;
 import com.opendigitaleducation.launcher.resolvers.ExtensionRegistry;
 import com.opendigitaleducation.launcher.utils.FileUtils;
 
+import com.opendigitaleducation.launcher.utils.ServiceUtils;
 import io.vertx.core.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -97,52 +98,54 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         }
         log.info("Starting deployment of mod : " + name);
         final JsonObject config = service.getJsonObject("config", new JsonObject());
-        final String servicePath = absoluteServicePath + File.separator + name;
-        config.put("cwd", servicePath);
-        config.put("metricsOptions", metricsOptions);
-        if (!config.containsKey("assets-path") && assetPath != null) {
-            config.put("assets-path", assetPath);
-        }
-        final String address = config.getString("address");
-        if (cluster && !node.isEmpty() && address != null) {
-            config.put("address", node + address);
-        }
-        final DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(config)
+        return ServiceUtils.getServicePathFromIdentifier(name, absoluteServicePath, vertx)
+        .flatMap(servicePath -> {
+            config.put("cwd", servicePath);
+            config.put("metricsOptions", metricsOptions);
+            if (!config.containsKey("assets-path") && assetPath != null) {
+                config.put("assets-path", assetPath);
+            }
+            final String address = config.getString("address");
+            if (cluster && !node.isEmpty() && address != null) {
+                config.put("address", node + address);
+            }
+            final DeploymentOptions deploymentOptions = new DeploymentOptions().setConfig(config)
                 .setWorker(service.getBoolean("worker", false))
                 .setInstances(config.getInteger("instances", 1));
-        if(config.containsKey("workerPoolSize")) {
-            deploymentOptions.setWorkerPoolSize(config.getInteger("workerPoolSize"));
-            log.info("Setting worker pool size to " + deploymentOptions.getWorkerPoolSize());
-        }
-        if(config.containsKey("workerPoolName")) {
-            deploymentOptions.setWorkerPoolName(config.getString("workerPoolName"));
-            log.info("Setting worker pool name to " + deploymentOptions.getWorkerPoolSize());
-        }
-        // register extension
-        ExtensionRegistry.register(ModuleDeployer.getServiceIdQuietly(service), service);
-        // custom deployer
-        final Promise<Void> promise = Promise.promise();
-        if (customDeployer.canDeploy(service)) {
-            customDeployer.deploy(service, res -> {
-                if (res.succeeded()) {
-                    log.info("Custom deployment succeed :" + name);
-                    promise.complete();
-                    hook.emit(service, Hook.HookEvents.Deployed);
-                } else {
-                    log.error("Custom deployment failed :" + name, res.cause());
-                    promise.fail(res.cause());
-                }
-            });
-            return promise.future();
-        }
+            if (config.containsKey("workerPoolSize")) {
+                deploymentOptions.setWorkerPoolSize(config.getInteger("workerPoolSize"));
+                log.info("Setting worker pool size to " + deploymentOptions.getWorkerPoolSize());
+            }
+            if (config.containsKey("workerPoolName")) {
+                deploymentOptions.setWorkerPoolName(config.getString("workerPoolName"));
+                log.info("Setting worker pool name to " + deploymentOptions.getWorkerPoolSize());
+            }
+            // register extension
+            ExtensionRegistry.register(ModuleDeployer.getServiceIdQuietly(service), service);
+            // custom deployer
+            final Promise<Void> promise = Promise.promise();
+            if (customDeployer.canDeploy(service)) {
+                customDeployer.deploy(service, res -> {
+                    if (res.succeeded()) {
+                        log.info("Custom deployment succeed :" + name);
+                        promise.complete();
+                        hook.emit(service, Hook.HookEvents.Deployed);
+                    } else {
+                        log.error("Custom deployment failed :" + name, res.cause());
+                        promise.fail(res.cause());
+                    }
+                });
+                return promise.future();
+            }
 
-        final JsonArray depends = service.getJsonArray(DEPENDS);
-        if (!vertx.isClustered() || depends == null || depends.isEmpty()) {
-            deployVerticle(service, servicePath, deploymentOptions, promise);
-        } else {
-            deployVerticleAfterDependancies(service, servicePath, deploymentOptions, promise);
-        }
-        return promise.future();
+            final JsonArray depends = service.getJsonArray(DEPENDS);
+            if (!vertx.isClustered() || depends == null || depends.isEmpty()) {
+                deployVerticle(service, servicePath, deploymentOptions, promise);
+            } else {
+                deployVerticleAfterDependancies(service, servicePath, deploymentOptions, promise);
+            }
+            return promise.future();
+        });
     }
 
     private void tryDeployVerticle(JsonObject service, String servicePath,

@@ -16,7 +16,7 @@ import java.util.logging.Logger;
  */
 public class VertxWithPreConfigLauncher extends Launcher {
 
-    private Logger logger = Logger.getLogger(VertxWithPreConfigLauncher.class.getCanonicalName());
+    private static final Logger logger = Logger.getLogger(VertxWithPreConfigLauncher.class.getCanonicalName());
     /**
      * Metrics options coming from the configuration (-conf argument).
      */
@@ -29,6 +29,7 @@ public class VertxWithPreConfigLauncher extends Launcher {
      * @param args the user command line arguments.
      */
     public static void main(String[] args) {
+        logger.info("==================== Starting Vertx ====================");
         new VertxWithPreConfigLauncher().dispatch(args);
     }
 

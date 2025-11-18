@@ -24,9 +24,12 @@ public class ConfigProviderMemory implements ConfigProvider {
             log.error("Missing services to deploy.");
             return this;
         }
-
+        final String enabledServicesEnvVar = System.getenv("ENABLED_SERVICES");
+        log.debug("ENABLED_SERVICES = " + enabledServicesEnvVar);
+        final String disabledServicesEnvVar = System.getenv("DISABLED_SERVICES");
+        log.debug("DISABLED_SERVICES = " + disabledServicesEnvVar);
         final JsonArray deployableServices;
-        final List<String> enabledServices = Optional.ofNullable(System.getenv("ENABLED_SERVICES"))
+        final List<String> enabledServices = Optional.ofNullable(enabledServicesEnvVar)
             .map(x -> Arrays.asList(x.split(",")))
             .orElse(Collections.emptyList())
             .stream()
@@ -39,34 +42,52 @@ public class ConfigProviderMemory implements ConfigProvider {
             .filter(x -> !x.trim().isEmpty())
             .collect(Collectors.toSet());
         if (enabledServices.isEmpty()) {
+            log.debug("ENABLED_SERVICES env var is empty so we will try to deploy all services");
             deployableServices = services;
         } else {
             deployableServices = new JsonArray();
             services.stream()
                 .filter(x -> {
                     final String serviceName = ((JsonObject) x).getString("name");
-                    return enabledServices.contains(serviceName.substring(0, serviceName.lastIndexOf("~")));
+                    final boolean toAdd = enabledServices.contains(getServiceNameWithoutVersion(serviceName));
+                    if(!toAdd) {
+                        log.debug("Not including service " + serviceName);
+                    }
+                    return toAdd;
                 })
                 .forEach(deployableServices::add);
+            log.debug("Intersection between ENABLED_SERVICES and configuration services is : "+ deployableServices.encodePrettily());
         }
         final JsonArray servicesThatRemain;
         if(disabledServices.isEmpty()) {
+            log.debug("DISABLED_SERVICES env var is empty");
             servicesThatRemain = deployableServices;
         } else {
+            log.debug("DISABLED_SERVICES env var is " + disabledServices);
             final List<Object> finalServices = deployableServices.stream().filter(x -> {
                 final String serviceName = ((JsonObject) x).getString("name");
-                return !disabledServices.contains(serviceName.substring(0, serviceName.lastIndexOf("~")));
+                final boolean toExclude = !disabledServices.contains(getServiceNameWithoutVersion(serviceName));
+                if(toExclude) {
+                    log.debug("Excluding service " + serviceName);
+                }
+                return toExclude;
             }).collect(Collectors.toList());
             servicesThatRemain = new JsonArray(finalServices);
         }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Deployable services : " + servicesThatRemain.encodePrettily());
-        }
+        log.debug("Deployable services : " + servicesThatRemain.encodePrettily());
         dispatchSharedConfiguration(config);
 
         handler.handle(new ConfigChangeEventMemory(config, servicesThatRemain));
         return this;
+    }
+
+    public static String getServiceNameWithoutVersion(String serviceName) {
+        final String[] parts = serviceName.split("~");
+        if(parts.length <= 2) {
+            return serviceName;
+        } else {
+            return parts[0] + "~" + parts[1];
+        }
     }
 
     /**
