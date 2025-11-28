@@ -5,7 +5,6 @@ import com.opendigitaleducation.launcher.config.ConfigProvider;
 import com.opendigitaleducation.launcher.config.ConfigProviderListenerAssets;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
 import com.opendigitaleducation.launcher.listeners.ArtefactListener;
-import com.opendigitaleducation.launcher.utils.FileUtils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -60,8 +59,15 @@ public class VertxServiceLauncher extends AbstractVerticle {
 
     @Override
     public void start() throws Exception {
-        final Boolean clean = config().getBoolean("clean", true);
         deployer = ModuleDeployer.create(vertx, config());
+        deployer.init()
+            .onSuccess(r -> init())
+            .onFailure(ex -> log.error("Error initializing deployer", ex));
+    }
+
+    public void init() {
+        log.info("init verticle launcher");
+        final Boolean clean = config().getBoolean("clean", true);
         configProvider = ConfigProvider.create(config()).start(vertx, config());
         if(config().getBoolean("redeploy-assets-onclean", true)) {
             configProvider.addListener(new ConfigProviderListenerAssets());

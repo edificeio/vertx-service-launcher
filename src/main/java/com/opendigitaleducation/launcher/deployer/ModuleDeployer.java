@@ -21,6 +21,8 @@ public interface ModuleDeployer {
 
     Future<Void> restart(JsonObject service);
 
+    Future<Void> init();
+
     default Future<Void> restartAll(List<JsonObject> services) {
         Future<Void> currentFuture = Future.succeededFuture();
         for (final JsonObject service : services) {

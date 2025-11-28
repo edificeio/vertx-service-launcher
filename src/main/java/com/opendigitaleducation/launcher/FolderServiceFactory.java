@@ -2,8 +2,8 @@ package com.opendigitaleducation.launcher;
 
 import com.opendigitaleducation.launcher.resolvers.ServiceResolverFactory;
 import com.opendigitaleducation.launcher.utils.FileUtils;
+import com.opendigitaleducation.launcher.utils.ServiceUtils;
 import com.opendigitaleducation.launcher.utils.ZipUtils;
-
 import io.vertx.core.*;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
@@ -69,36 +69,31 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
             return;
         }
         final String identifier = id.substring(prefix().length() + 1);
-        String[] artifact = identifier.split("~");
-        if (artifact.length != 3) {
-           resolution.fail("Invalid artifact : " + identifier);
-           return;
-        }
-        final String servicePath = servicesPath + File.separator +
-            identifier + File.separator;
-        vertx.fileSystem().exists(servicePath, ar -> {
-            if (ar.succeeded() && ar.result()) {
-                deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
-            } else {
-                serviceResolver.resolve(identifier, jar -> {
-                    if (jar.succeeded()) {
-                        ZipUtils.unzip(vertx, jar.result(), servicePath, res -> {
-                            if (res.succeeded()) {
-                                deploy(identifier, deploymentOptions, classLoader, resolution, artifact, servicePath);
-                            } else {
-                                resolution.fail(res.cause());
-                            }
-                        });
-                    } else {
-                        logger.error("An error occurred while loading the jar of " + identifier, jar.cause());
-                        resolution.fail("Service not found (JAR): " + identifier);
-                    }
-                });
-            }
-		});
+        ServiceUtils.getServicePathFromIdentifier(identifier, servicesPath, vertx).onSuccess(sp -> {
+            String servicePath = sp + File.separator;
+            vertx.fileSystem().exists(servicePath, ar -> {
+                if (ar.succeeded() && ar.result()) {
+                    deploy(identifier, deploymentOptions, classLoader, resolution, servicePath);
+                } else {
+                    serviceResolver.resolve(identifier, jar -> {
+                        if (jar.succeeded()) {
+                            ZipUtils.unzip(vertx, jar.result(), servicePath, res -> {
+                                if (res.succeeded()) {
+                                    deploy(identifier, deploymentOptions, classLoader, resolution, servicePath);
+                                } else {
+                                    resolution.fail(res.cause());
+                                }
+                            });
+                        } else {
+                            logger.error("An error occurred while loading the jar of " + identifier, jar.cause());
+                            resolution.fail("Service not found (JAR): " + identifier);
+                        }
+                    });
+                }
+            });
+        }).onFailure(th -> resolution.fail(th.getMessage()));
     }
-
-    private void deploy(String identifier, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution, String[] artifact, String servicePath) {
+    private void deploy(String identifier, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution, String servicePath) {
         vertx.fileSystem().readFile(servicePath + "META-INF" + File.separator + "MANIFEST.MF", ar -> {
 			if (ar.succeeded()) {
                 Scanner s = new Scanner(ar.result().toString());
@@ -109,12 +104,14 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                         String [] item = line.split(":");
                         if (item.length == 3) {
                             id = item[2];
+
                             deploymentOptions.setExtraClasspath(Collections.singletonList(servicePath));
-                            deploymentOptions.setIsolationGroup("__vertx_folder_" + artifact[1]);
+                            deploymentOptions.setIsolationGroup("__vertx_folder_" + identifier.split("~")[1]);
                             try {
                                 URLClassLoader urlClassLoader = new URLClassLoader(
                                     new URL[]{new URL("file://" + servicePath )}, classLoader);
                                 FolderServiceFactory.super.createVerticle(id, deploymentOptions, urlClassLoader, resolution);
+                                // resolution.future().onSuccess(cv -> cv.call().getVertx().getOrCreateContext().config());
                             } catch (MalformedURLException e) {
                                 logger.error("Error while trying to deploy " + identifier, e);
                                 resolution.fail(e);

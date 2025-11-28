@@ -1,7 +1,6 @@
 package com.opendigitaleducation.launcher.config;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import io.vertx.core.Handler;
@@ -21,17 +20,168 @@ public class ConfigProviderMemory implements ConfigProvider {
     @Override
     public ConfigProvider onConfigChange(Handler<ConfigChangeEvent> handler) {
         final JsonArray services = config.getJsonArray("services", new JsonArray());
-        if (services.size() == 0) {
+        if (services.isEmpty()) {
             log.error("Missing services to deploy.");
             return this;
         }
-        handler.handle(new ConfigChangeEventMemory(config, services));
+        final String enabledServicesEnvVar = System.getenv("ENABLED_SERVICES");
+        log.debug("ENABLED_SERVICES = " + enabledServicesEnvVar);
+        final String disabledServicesEnvVar = System.getenv("DISABLED_SERVICES");
+        log.debug("DISABLED_SERVICES = " + disabledServicesEnvVar);
+        final JsonArray deployableServices;
+        final List<String> enabledServices = Optional.ofNullable(enabledServicesEnvVar)
+            .map(x -> Arrays.asList(x.split(",")))
+            .orElse(Collections.emptyList())
+            .stream()
+            .filter(x -> !x.trim().isEmpty())
+            .collect(Collectors.toList());
+        final Set<String> disabledServices = Optional.ofNullable(System.getenv("DISABLED_SERVICES"))
+            .map(x -> Arrays.asList(x.split(",")))
+            .orElse(Collections.emptyList())
+            .stream()
+            .filter(x -> !x.trim().isEmpty())
+            .collect(Collectors.toSet());
+        if (enabledServices.isEmpty()) {
+            log.debug("ENABLED_SERVICES env var is empty so we will try to deploy all services");
+            deployableServices = services;
+        } else {
+            deployableServices = new JsonArray();
+            services.stream()
+                .filter(x -> {
+                    final String serviceName = ((JsonObject) x).getString("name");
+                    final boolean toAdd = enabledServices.contains(getServiceNameWithoutVersion(serviceName));
+                    if(!toAdd) {
+                        log.debug("Not including service " + serviceName);
+                    }
+                    return toAdd;
+                })
+                .forEach(deployableServices::add);
+            log.debug("Intersection between ENABLED_SERVICES and configuration services is : "+ deployableServices.encodePrettily());
+        }
+        final JsonArray servicesThatRemain;
+        if(disabledServices.isEmpty()) {
+            log.debug("DISABLED_SERVICES env var is empty");
+            servicesThatRemain = deployableServices;
+        } else {
+            log.debug("DISABLED_SERVICES env var is " + disabledServices);
+            final List<Object> finalServices = deployableServices.stream().filter(x -> {
+                final String serviceName = ((JsonObject) x).getString("name");
+                final boolean toExclude = !disabledServices.contains(getServiceNameWithoutVersion(serviceName));
+                if(toExclude) {
+                    log.debug("Excluding service " + serviceName);
+                }
+                return toExclude;
+            }).collect(Collectors.toList());
+            servicesThatRemain = new JsonArray(finalServices);
+        }
+        log.debug("Deployable services : " + servicesThatRemain.encodePrettily());
+        dispatchSharedConfiguration(config);
+
+        handler.handle(new ConfigChangeEventMemory(config, servicesThatRemain));
         return this;
+    }
+
+    public static String getServiceNameWithoutVersion(String serviceName) {
+        final String[] parts = serviceName.split("~");
+        if(parts.length <= 2) {
+            return serviceName;
+        } else {
+            return parts[0] + "~" + parts[1];
+        }
+    }
+
+    /**
+     * Takes the configuration located in the global "sharedConf" field and put it in every service.
+     * Note that only first level fields are copied as a whole, we won't recursively explore objects to copy missing
+     * fields (as they might not be missing but just unset for a particular reason).
+     *
+     * Exemple :
+     * If we have<pre>
+     *     "sharedConf": {
+     *     "foo": "foo-value",
+     *     "bar": {
+     *       "innerProp": "inner Prop value",
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   },
+     * "services" : [
+     * {
+     *   "name": "my-service",
+     *   "config":{
+     *     "someProp": "some Value"
+     *   }
+     * },
+     * {
+     *   "name": "other-service",
+     *   "config":{
+     *     "thing": "some gniht",
+     *     "bar": {
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   }
+     * }
+     * </pre>
+     * We will end up with
+     * <pre>
+     *     "services" : [
+     * {
+     *   "name": "my-service",
+     *   "config":{
+     *     "someProp": "some Value",
+     *     "foo": "foo-value",
+     *     "bar": {
+     *       "innerProp": "inner Prop value",
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   }
+     * },
+     * {
+     *   "name": "other-service",
+     *   "config":{
+     *     "thing": "some gniht",
+     *     "foo": "foo-value",
+     *     "bar": {
+     *       "innerObject": {
+     *         "here": "there"
+     *       }
+     *     }
+     *   }
+     * }
+     * </pre>
+     * <ul>
+     *     <li>my-service got all the keys from sharedConf</li>
+     *     <li>other-service just got the "foo" field and the field "bar" was not changed (we didn't put bar.innerProd</li>
+     * </ul>
+     * @param globalConfiguration Global configuration
+     */
+    public static void dispatchSharedConfiguration(final JsonObject globalConfiguration) {
+        final JsonObject globalSharedConf = globalConfiguration.getJsonObject("sharedConf");
+        if(globalSharedConf == null) {
+            log.warn("No global shared configuration is set");
+        } else {
+            final JsonArray services = globalConfiguration.getJsonArray("services", new JsonArray());
+            for (Object rawService : services) {
+                final JsonObject service = (JsonObject) rawService;
+                final JsonObject serviceConfig = service.getJsonObject("config");
+                for (Map.Entry<String, Object> sharedConf : globalSharedConf) {
+                    final String sharedConfKey = sharedConf.getKey();
+                    if(!serviceConfig.containsKey(sharedConfKey)) {
+                        serviceConfig.put(sharedConfKey, sharedConf.getValue());
+                    }
+                }
+            }
+        }
     }
 
     @Override
     public ConfigProvider start(Vertx vertx, JsonObject config) {
-        this.config = config;
+        this.config = valuateConfig(config);
         return this;
     }
 
@@ -44,6 +194,69 @@ public class ConfigProviderMemory implements ConfigProvider {
     @Override
     public ConfigProvider stop(Vertx vertx) {
         return this;
+    }
+
+
+    public static JsonObject valuateConfig(final JsonObject config) {
+        final JsonObject valuated = new JsonObject();
+        config.stream().forEach(entry -> {
+            final String key = entry.getKey();
+            final Object value = entry.getValue();
+            final Object newValue;
+            if (value instanceof String) {
+                newValue = valuateConfig((String) value);
+            } else if(value instanceof JsonObject) {
+                newValue = valuateConfig((JsonObject) value);
+            } else if(value instanceof JsonArray) {
+                newValue = valuateConfig((JsonArray) value);
+            } else {
+                newValue = value;
+            }
+            valuated.put(key, newValue);
+        });
+        return valuated;
+    }
+
+    public static JsonArray valuateConfig(final JsonArray array) {
+        final JsonArray valuated = new JsonArray();
+        array.stream().forEach(value -> {
+            final Object newValue;
+            if (value instanceof String) {
+                newValue = valuateConfig((String) value);
+            } else if(value instanceof JsonObject) {
+                newValue = valuateConfig((JsonObject) value);
+            } else if(value instanceof JsonArray) {
+                newValue = valuateConfig((JsonArray) value);
+            } else {
+                newValue = value;
+            }
+            valuated.add(newValue);
+        });
+        return valuated;
+    }
+
+    public static String valuateConfig(final String config) {
+        // We replace all instances of ${ENV_VAR} with the value of the environment variable ENV_VAR
+        // and ${ENV_VAR:default_value} with the value of the environment variable ENV_VAR or default_value if ENV_VAR is not set
+        // If ${!ENV_VAR} is used, an exception is thrown if ENV_VAR is not set
+        String valuated = config;
+        final String matcher = "\\$\\{(!?)([a-zA-Z0-9_]+)(:([^}]*))?\\}";
+        final java.util.regex.Matcher m = java.util.regex.Pattern.compile(matcher).matcher(config);
+        while (m.find()) {
+            final String envVar = m.group(2);
+            final String defaultValue = m.group(4);
+            final String envValue = System.getenv(envVar);
+            if (envValue != null) {
+                valuated = valuated.replace(m.group(0), envValue);
+            } else if (m.group(1).equals("!")) {
+                throw new IllegalArgumentException("Environment variable " + envVar + " is not set");
+            } else if (defaultValue != null) {
+                valuated = valuated.replace(m.group(0), defaultValue);
+            } else {
+                valuated = valuated.replace(m.group(0), "");
+            }
+        }
+        return valuated;
     }
 
     private static class ConfigChangeEventMemory extends ConfigChangeEvent {
