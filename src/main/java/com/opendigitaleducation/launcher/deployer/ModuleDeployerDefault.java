@@ -42,8 +42,10 @@ public class ModuleDeployerDefault implements ModuleDeployer {
     private final JsonObject metricsOptions;
     private CustomDeployerManager customDeployer;
     private AsyncMap<String, String> versionMap;
+    private LocalMap<String, String> versionLocalMap;
     /** Map holding useful metadata about deployed modules. */
     private AsyncMap<String, JsonObject> detailedVersionMap;
+    private LocalMap<String, JsonObject> detailedVersionLocalMap;
     private final LocalMap<String, String> deploymentsIdMap;
     private final ServiceDiscovery serviceDiscovery;
 
@@ -76,13 +78,29 @@ public class ModuleDeployerDefault implements ModuleDeployer {
 
     @Override
     public Future<Void> init() {
+        final Future<Void> future;
         final Future<Void> f1 = vertx.sharedData().<String, String>getAsyncMap("versions")
-            .compose(x -> { versionMap = x; return Future.<Void>succeededFuture(); });
+            .compose(x -> {
+                versionMap = x;
+                return Future.<Void>succeededFuture();
+            });
         final Future<Void> f2 = vertx.sharedData().<String, JsonObject>getAsyncMap("detailedVersions")
-            .compose(x -> { detailedVersionMap = x; return Future.<Void>succeededFuture(); });
+            .compose(x -> {
+                detailedVersionMap = x;
+                return Future.<Void>succeededFuture();
+            });
         final Future<Void> f3 = vertx.sharedData().<String, Object>getLocalAsyncMap("server")
             .compose(x -> x.put("node", node));
-        return Future.all(f1, f2, f3).compose(x -> Future.succeededFuture());
+        final LocalMap<Object, Object> serverMap = vertx.sharedData().getLocalMap("server");
+        serverMap.put("node", node);
+        versionLocalMap = vertx.sharedData().getLocalMap("versions");
+        detailedVersionLocalMap = vertx.sharedData().getLocalMap("detailedVersions");
+        if(vertx.isClustered()) {
+            future = Future.all(f1, f2, f3).compose(x -> Future.succeededFuture());
+        } else {
+            future = Future.succeededFuture();
+        }
+        return future;
     }
 
     protected String getServicePath(JsonObject service) throws Exception {
@@ -307,6 +325,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
             final String version = lNameVersion[2];
             versionMap.put(moduleKey, version)
                 .onFailure(ex -> log.error("Error when put module version", ex));
+            versionLocalMap.put(moduleKey, version);
             deploymentsIdMap.put(moduleName, deploymentId);
             // use module name in case of multiple mods with different
                                                            // versions
@@ -332,6 +351,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                 }
                 detailedVersionMap.put(moduleKey, detailedVersion)
                     .onFailure(ex -> log.error("Error when put module detailed version", ex));
+                detailedVersionLocalMap.put(moduleKey, detailedVersion);
             });
         }
     }
@@ -341,7 +361,9 @@ public class ModuleDeployerDefault implements ModuleDeployer {
         if (lNameVersion.length == 3) {
             final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
             versionMap.remove(moduleKey).onFailure(ex -> log.error("Error when remove module version", ex));
+            versionLocalMap.remove(moduleKey);
             detailedVersionMap.remove(moduleKey);
+            detailedVersionLocalMap.remove(moduleKey);
             deploymentsIdMap.remove(moduleName);
         }
     }
