@@ -1,5 +1,7 @@
 package com.opendigitaleducation.launcher.interceptor;
 
+import io.vertx.codegen.annotations.Nullable;
+import io.vertx.core.Context;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.DeliveryContext;
@@ -30,16 +32,19 @@ public class TraceIdInboundInterceptor<T> implements Handler<DeliveryContext<T>>
 
     private void setTraceIdQuietly(Message<?> message) {
         if (message.headers().contains(TRACE_ID)) {
-            try {
-                Vertx.currentContext().putLocal(TRACE_TIME, String.valueOf(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)));
-                Vertx.currentContext().putLocal(TRACE_ID, message.headers().get(TRACE_ID));
-                Vertx.currentContext().putLocal(TRACE_ADDRESS, message.address());
-                if(message.address() != null && !message.address().contains("__vertx.reply")) {
-                    logger.info(String.format("Bus query @%s", message.address()));
+            final Context context = Vertx.currentContext();
+            if(context != null) {
+                try {
+                    context.putLocal(TRACE_TIME, String.valueOf(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)));
+                    context.putLocal(TRACE_ID, message.headers().get(TRACE_ID));
+                    context.putLocal(TRACE_ADDRESS, message.address());
+                    if (message.address() != null && !message.address().contains("__vertx.reply")) {
+                        logger.debug(String.format("Bus query @%s", message.address()));
+                    }
+                } catch (RuntimeException e) {
+                    //silent
                 }
-           } catch (RuntimeException e) {
-               //silent
-           }
+            }
         }
     }
 }

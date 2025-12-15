@@ -10,6 +10,7 @@ import com.opendigitaleducation.launcher.listeners.ArtefactListener;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
+import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -88,9 +89,10 @@ public class VertxServiceLauncher extends AbstractVerticle {
             });
         }
         //interceptor for trace Id
+        final EventBus eb = vertx.eventBus();
         if(config().containsKey("sharedConf") && config().getJsonObject("sharedConf").getBoolean("log-bus-access", false)) {
-            vertx.eventBus().addInboundInterceptor(new TraceIdInboundInterceptor<>());
-            vertx.eventBus().addOutboundInterceptor(new TraceIdOutboundInterceptor<>());
+            eb.addInboundInterceptor(new TraceIdInboundInterceptor<>());
+            eb.addOutboundInterceptor(new TraceIdOutboundInterceptor<>());
         }
         vertx.eventBus().localConsumer(SERVICE_LAUNCHER, deploymentActions());
     }
