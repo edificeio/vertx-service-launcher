@@ -17,6 +17,7 @@ import static com.opendigitaleducation.launcher.interceptor.TraceIdInboundInterc
 public class TraceIdOutboundInterceptor<T> implements Handler<DeliveryContext<T>> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TraceIdOutboundInterceptor.class);
+    public static final String TRACE_MTTR = "Trace-MTTR";
 
     @Override
     public void handle(DeliveryContext<T> event) {
@@ -35,8 +36,9 @@ public class TraceIdOutboundInterceptor<T> implements Handler<DeliveryContext<T>
             if (!StringUtils.isEmpty(traceTime)) {
                 long originTime = Long.parseLong(traceTime);
                 long finishTime = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC) - originTime;
+                Vertx.currentContext().putLocal(TRACE_MTTR, finishTime);
                 if (traceAddress != null && !traceAddress.contains("__vertx.reply")) {
-                    LOG.info(String.format("End of Bus Query %s in [%s ms] ", Objects.toString(traceAddress, ""), finishTime));
+                    LOG.info(String.format("End of Bus Query %s", Objects.toString(traceAddress, "")));
                 }
             }
         } catch (RuntimeException e) {

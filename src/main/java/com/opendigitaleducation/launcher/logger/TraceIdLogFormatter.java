@@ -1,8 +1,6 @@
 package com.opendigitaleducation.launcher.logger;
 
-import com.opendigitaleducation.launcher.utils.TraceIdProvider;
-import io.vertx.core.Context;
-import io.vertx.core.Vertx;
+import com.opendigitaleducation.launcher.utils.LocalContextProvider;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.PrintWriter;
@@ -13,8 +11,6 @@ import java.time.ZoneId;
 import java.util.logging.Formatter;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
-
-import static com.opendigitaleducation.launcher.interceptor.TraceIdInboundInterceptor.TRACE_ID;
 
 public class TraceIdLogFormatter extends Formatter {
 
@@ -28,7 +24,7 @@ public class TraceIdLogFormatter extends Formatter {
 
     @Override
     public String format(LogRecord record) {
-        String traceId = TraceIdProvider.getTraceId();
+        String traceId = LocalContextProvider.getTraceId();
         LocalDateTime instant = LocalDateTime.ofInstant(Instant.ofEpochMilli(record.getMillis()), ZoneId.systemDefault());
         String source;
         if (record.getSourceClassName() != null) {

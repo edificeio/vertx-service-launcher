@@ -88,8 +88,10 @@ public class VertxServiceLauncher extends AbstractVerticle {
             });
         }
         //interceptor for trace Id
-        vertx.eventBus().addInboundInterceptor(new TraceIdInboundInterceptor<>());
-        vertx.eventBus().addOutboundInterceptor(new TraceIdOutboundInterceptor<>());
+        if(config().containsKey("sharedConf") && config().getJsonObject("sharedConf").getBoolean("log-bus-access", false)) {
+            vertx.eventBus().addInboundInterceptor(new TraceIdInboundInterceptor<>());
+            vertx.eventBus().addOutboundInterceptor(new TraceIdOutboundInterceptor<>());
+        }
         vertx.eventBus().localConsumer(SERVICE_LAUNCHER, deploymentActions());
     }
 
