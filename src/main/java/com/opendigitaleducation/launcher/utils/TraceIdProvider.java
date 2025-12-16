@@ -8,11 +8,11 @@ import static com.opendigitaleducation.launcher.interceptor.TraceIdInboundInterc
 public class TraceIdProvider {
 
     public static String getTraceId() {
-        String traceId = null;
+        String traceId = "";
         try {
             Context context = Vertx.currentContext();
             if(context.getLocal(TRACE_ID) != null) {
-                traceId = "[" + context.getLocal(TRACE_ID) + "] ";
+                traceId = context.getLocal(TRACE_ID);
             }
         } catch (RuntimeException e) {
             //we are out of the context, can happen with endHandler or worker if we don't join the context

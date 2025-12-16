@@ -3,6 +3,7 @@ package com.opendigitaleducation.launcher.logger;
 import com.opendigitaleducation.launcher.utils.TraceIdProvider;
 import io.vertx.core.Context;
 import io.vertx.core.Vertx;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -48,7 +49,7 @@ public class TraceIdLogFormatter extends Formatter {
             pw.close();
             throwable = sw.toString();
         }
-        if(traceId == null) {
+        if(StringUtils.isEmpty(traceId)) {
             return String.format(format,
                 instant,
                 source,
@@ -65,6 +66,6 @@ public class TraceIdLogFormatter extends Formatter {
             record.getLevel().getLocalizedName(),
             message,
             throwable,
-            traceId);
+            "[" + traceId + "] ");
     }
 }
