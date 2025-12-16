@@ -1,5 +1,6 @@
 package com.opendigitaleducation.launcher.logger;
 
+import com.opendigitaleducation.launcher.utils.TraceIdProvider;
 import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 
@@ -26,15 +27,7 @@ public class TraceIdLogFormatter extends Formatter {
 
     @Override
     public String format(LogRecord record) {
-        String traceId = null;
-        try {
-            Context context = Vertx.currentContext();
-            if(context.getLocal(TRACE_ID) != null) {
-                traceId = "[" + context.getLocal(TRACE_ID) + "] ";
-            }
-        } catch (RuntimeException e) {
-            //we are out of the context, can happen with endHandler or worker if we don't join the context
-        }
+        String traceId = TraceIdProvider.getTraceId();
         LocalDateTime instant = LocalDateTime.ofInstant(Instant.ofEpochMilli(record.getMillis()), ZoneId.systemDefault());
         String source;
         if (record.getSourceClassName() != null) {

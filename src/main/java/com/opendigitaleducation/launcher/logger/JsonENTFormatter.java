@@ -1,5 +1,6 @@
 package com.opendigitaleducation.launcher.logger;
 
+import com.opendigitaleducation.launcher.utils.TraceIdProvider;
 import io.vertx.core.json.JsonObject;
 
 import java.io.PrintWriter;
@@ -16,6 +17,7 @@ public class JsonENTFormatter extends Formatter {
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
       .put("level", record.getLevel().toString())
       .put("logger", record.getLoggerName())
+      .put("traceId", TraceIdProvider.getTraceId())
       .put("message", record.getMessage());
 
     if (record.getThrown() != null) {
