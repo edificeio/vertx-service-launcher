@@ -4,6 +4,8 @@ import com.opendigitaleducation.launcher.config.ConfigChangeEvent;
 import com.opendigitaleducation.launcher.config.ConfigProvider;
 import com.opendigitaleducation.launcher.config.ConfigProviderListenerAssets;
 import com.opendigitaleducation.launcher.deployer.ModuleDeployer;
+import com.opendigitaleducation.launcher.interceptor.TraceIdInboundInterceptor;
+import com.opendigitaleducation.launcher.interceptor.TraceIdOutboundInterceptor;
 import com.opendigitaleducation.launcher.listeners.ArtefactListener;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
@@ -84,6 +86,11 @@ public class VertxServiceLauncher extends AbstractVerticle {
             artefactListener.get().onArtefactChange( res -> {
                 configProvider.triggerChange(res.setForceClean(true));
             });
+        }
+        //interceptor for trace Id
+        if(config().containsKey("sharedConf") && config().getJsonObject("sharedConf").getBoolean("log-bus-access", false)) {
+            vertx.eventBus().addInboundInterceptor(new TraceIdInboundInterceptor<>());
+            vertx.eventBus().addOutboundInterceptor(new TraceIdOutboundInterceptor<>());
         }
         vertx.eventBus().localConsumer(SERVICE_LAUNCHER, deploymentActions());
     }
