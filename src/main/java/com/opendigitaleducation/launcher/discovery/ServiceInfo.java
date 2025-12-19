@@ -20,6 +20,8 @@ public class ServiceInfo implements Serializable {
     private final boolean httpService;
     private final String healthcheck;
 
+    private boolean ssl = false;
+
     public ServiceInfo(String moduleName, String router, String ip, String nodeId, JsonObject config) {
         name = getServiceName(moduleName);
         this.router = router + "." + name;
@@ -28,7 +30,11 @@ public class ServiceInfo implements Serializable {
         if (config != null && config.getInteger("port") != null && config.getBoolean("http-service", true)) {
             this.pathPrefix = getPathPrefix(config);
             this.port = config.getInteger("port");
-            this.url = getInstanceUrl(false, ip, port, pathPrefix);
+            final JsonObject httpServerOptions = config.getJsonObject("httpServerOptions");
+            if (httpServerOptions != null) {
+                this.ssl = httpServerOptions.getBoolean("ssl", false);
+            }
+            this.url = getInstanceUrl(ssl, ip, port, pathPrefix);
             this.httpService = true;
             this.healthcheck = ("/".equals(pathPrefix) ? "" : pathPrefix) + "/health/liveness";
         } else {
@@ -41,7 +47,7 @@ public class ServiceInfo implements Serializable {
     }
 
     public ServiceInfo(String moduleName, String router, String ip, Integer port,
-            String pathPrefix, String nodeId, boolean httpService, String healthcheck) {
+            String pathPrefix, String nodeId, boolean httpService, boolean ssl, String healthcheck) {
         name = getServiceName(moduleName);
         this.router = router;
         this.ip = ip;
@@ -49,7 +55,7 @@ public class ServiceInfo implements Serializable {
         this.pathPrefix = pathPrefix;
         this.nodeId = nodeId;
         this.httpService = httpService;
-        this.url = getInstanceUrl(false, ip, port, pathPrefix);
+        this.url = getInstanceUrl(ssl, ip, port, pathPrefix);
         this.healthcheck = healthcheck;
     }
 
@@ -112,4 +118,7 @@ public class ServiceInfo implements Serializable {
         return healthcheck;
     }
 
+    public boolean isSsl() {
+        return ssl;
+    }
 }
