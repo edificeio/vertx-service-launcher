@@ -87,7 +87,7 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
                     "org.entcore~userbook~version",
                     serviceInfo.getRouter().replaceAll("directory", "userbook"),
                     serviceInfo.getIp(), serviceInfo.getPort(), "/userbook",
-                    serviceInfo.getNodeId(), serviceInfo.isHttpService(), serviceInfo.getHealthcheck()));
+                    serviceInfo.getNodeId(), serviceInfo.isHttpService(), serviceInfo.isSsl(), serviceInfo.getHealthcheck()));
             }
             promise.complete(serviceInfo);
         } catch (Exception e) {
