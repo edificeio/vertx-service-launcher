@@ -17,9 +17,15 @@ public class JsonENTFormatter extends Formatter {
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
       .put("level", record.getLevel().toString())
       .put("logger", record.getLoggerName())
-      .put("traceId", LocalContextProvider.getTraceId())
-      .put("message", record.getMessage())
-      .put("mttr", LocalContextProvider.getMTTR());
+      .put("message", record.getMessage());
+    final String traceId = LocalContextProvider.getTraceId();
+    if(!traceId.isEmpty()) {
+        logEntry.put("traceId", traceId);
+    }
+    final String mttr = LocalContextProvider.getMTTR();
+    if(mttr != null && !mttr.isEmpty()) {
+      logEntry.put("mttr", mttr);
+    }
 
     if (record.getThrown() != null) {
         try {
