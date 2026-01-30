@@ -1,6 +1,30 @@
 #!/bin/bash
 set -e
 
+# If EXPORT_CONF_TEMPLATE is set to true then export template.j2 files contained in /srv/springboard/mods to EXPORT_CONF_TEMPLATE_PATH
+if [ "$EXPORT_CONF_TEMPLATE" = "true" ]; then
+    # If EXPORT_CONF_TEMPLATE_PATH is not set raise an error
+    if [ -z "$EXPORT_CONF_TEMPLATE_PATH" ]; then
+        echo "ERROR: EXPORT_CONF_TEMPLATE_PATH is not set. Please set it to the desired export path."
+        exit 1
+    fi
+    cd /srv/springboard
+    find ./mods -maxdepth 2 -mindepth 2 -type f -name "template.j2" | while read f; do \
+        relpath=$(echo "$f" | sed 's|^\./mods/||'); \
+        dir=$(dirname "$relpath"); \
+        mkdir -p "$EXPORT_CONF_TEMPLATE_PATH/$dir"; \
+        cp "$f" "$EXPORT_CONF_TEMPLATE_PATH/$relpath"; \
+    done
+    echo "The following templates were exported to $EXPORT_CONF_TEMPLATE_PATH"
+    find "$EXPORT_CONF_TEMPLATE_PATH" -type f -name "template.j2"
+    # If no template.j2 files were found, inform the user and exit
+    if [ "$(find "$EXPORT_CONF_TEMPLATE_PATH" -type f -name "template.j2" | wc -l)" -eq 0 ]; then
+        echo "No template.j2 files were found in /srv/springboard/mods."
+        exit 1
+    fi
+    exit 0
+fi
+
 # Generate logging.properties with environment variable support
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 VERTX_LOG_LEVEL="${VERTX_LOG_LEVEL:-INFO}"
