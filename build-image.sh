@@ -5,7 +5,7 @@ set -e
 VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 JAR_FILE="vertx-service-launcher-$VERSION-fat.jar"
 TAG="opendigitaleducation/vertx-service-launcher:$VERSION"
-ARCHITECTURE="linux/arm/v7,linux/arm64,linux/amd64"
+ARCHITECTURE="linux/arm64,linux/amd64"
 
 BRANCH_NAME=`git branch | sed -n -e "s/^\* \(.*\)/\1/p"`
 if [ "$BRANCH_NAME" = "master" ]; then
