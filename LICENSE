@@ -1,0 +1,42 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+Vertx Service Launcher'S LICENCE
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+URI: http://www.ent-core.org
+
+// English version (French version below) //
+
+Vertx Service Launcher is published by "Edifice". You must indicate the name of the software and the company in any production /contribution using the software and indicate on the home page of the software industry in question, "powered by Edifice" with a reference to the website: https: //edifice.io/.
+
+Vertx Service Launcher is free software, licensed under the terms of the GNU Affero General Public License as published by the Free Software Foundation, version 3 of the License.
+
+For the sake of explanation, any module that communicate over native Web protocols, such as HTTP, with Vertx Service Launcher is outside the scope of this license and could be license under its own terms. This is merely considered normal use of Vertx Service Launcher, and does not fall under the heading of "covered work".
+
+You can redistribute Vertx Service Launcher and/or modify it since you respect the terms of the GNU Affero General Public License. If you modify the source code of Vertx Service Launcher and then use this modified source code in your creation, you must make available the source code of your modifications of Vertx Service Launcher.
+
+You should have received a copy of the GNU Affero General Public License along with Vertx Service Launcher. If not, please see : <http://www.gnu.org/licenses/>. Full compliance requires reading the terms of this license and following its directives.
+
+Finally, Vertx Service Launcher is made using external components and libraries. They are listed at the end of this file.
+
+//////////////////// // French version // ////////////////////
+Vertx Service Launcher est publié par "Edifice". Vous devez ainsi citer le logiciel et le nom de la société dans toute production/contribution utilisant le logiciel et indiquer  sur la page d’accueil de la production logicielle en question, « motorisé par Edifice » avec un renvoi vers le site web : https://edifice.io/.
+
+Vertx Service Launcher est un logiciel libre, diffusé selon les termes de la GNU Affero General Public License telle que publiée par la Free Software Foundation dans sa version 3.
+
+Par souci de clarté, un module qui communique avec Vertx Service Launcher au travers de protocoles Web standards natifs, tels que HTTP, est en dehors de l'étendue de cette licence et peut être diffusé sous ses propres termes. Cet usage est simplement considéré comme une utilisation normale de Vertx Service Launcher, et ne tombe pas sous la qualification de « Covered Work ».
+
+Vous ne pouvez redistribuer ou modifier ces fichiers que si vous respectez les termes de la GNU Affero General Public License. Si vous modifiez les codes sources du logiciel Vertx Service Launcher et utilisez les codes sources modifiés dans votre création, vous devez rendre votre création librement utilisable et disponible.
+
+Nous vous remercions de bien vouloir prendre connaissance de la GNU Affero General Public License avec le logiciel Vertx Service Launcher, disponible au lien suivant : <http://www.gnu.org/licenses/> et de bien lire les dispositions et les directives de la licence afin de vous assurer de leur complet respect.
+
+Enfin, Vertx Service Launcher utilise des composants et bibliothèques externes. Ils sont listés à la fin de ce fichier.
+
+
+/// Libraries ///
+
+This product includes/uses software, Vert.X (http://vertx.io/),
+developed by Vert.X  (http://vertx.io/)
+License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+This product includes/uses software, Gradle (http://www.gradle.org/),
+developed by Gradleware (http://www.gradleware.com/)
+License: The Apache Software License, Version 2.0  (http://www.apache.org/licenses/LICENSE-2.0.txt)
