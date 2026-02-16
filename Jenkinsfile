@@ -4,7 +4,7 @@ pipeline {
       stage("Initialization") {
         steps {
           script {
-            def version = sh(returnStdout: true, script: 'mvn help:evaluate -Dexpression=project.version -q -DforceStdout')
+            def version = sh(returnStdout: true, script: 'mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout')
             buildName "${env.GIT_BRANCH.replace("origin/", "")}@${version}"
           }
         }
