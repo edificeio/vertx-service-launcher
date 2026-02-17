@@ -13,7 +13,8 @@ import io.vertx.core.json.JsonObject;
 public interface ServiceDiscovery {
 
     static ServiceDiscovery create(final Vertx vertx) {
-        return vertx.isClustered() ? new TraefikServiceDiscovery(vertx) : new NopServiceDiscovery();
+        final boolean isTraefikDiscoveryAvailable = "true".equalsIgnoreCase(System.getenv().getOrDefault("TRAEFIK_DISCOVERY", "false"));
+        return isTraefikDiscoveryAvailable ? new TraefikServiceDiscovery(vertx) : new NopServiceDiscovery();
     }
 
     Future<ServiceInfo> serviceRegistration(String moduleName, JsonObject config);
