@@ -4,7 +4,7 @@ pipeline {
       stage("Initialization") {
         steps {
           script {
-            def version = sh(returnStdout: true, script: 'mvn help:evaluate -Dexpression=project.version -q -DforceStdout')
+            def version = sh(returnStdout: true, script: 'mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout')
             buildName "${env.GIT_BRANCH.replace("origin/", "")}@${version}"
           }
         }
@@ -26,6 +26,11 @@ pipeline {
           esac
             mvn deploy:deploy-file -DgroupId=com.opendigitaleducation -DartifactId=vertx-service-launcher -Dversion=$jarVersion -Dpackaging=jar -Dclassifier=fat -Dfile=$jarFile -DrepositoryId=ode-$nexusRepository -Durl=https://maven.opendigitaleducation.com/nexus/content/repositories/$nexusRepository/
         '''
+      }
+    }
+    stage('Image') {
+      steps {
+        sh './build-image.sh'
       }
     }
   }

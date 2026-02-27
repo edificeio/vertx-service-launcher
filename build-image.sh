@@ -2,7 +2,7 @@
 
 set -e
 
-VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/\x1b\[[0-9;]*m//g' | tr -d '[:cntrl:]')
 JAR_FILE="vertx-service-launcher-$VERSION-fat.jar"
 TAG="opendigitaleducation/vertx-service-launcher:$VERSION"
 ARCHITECTURE="linux/arm64,linux/amd64"
