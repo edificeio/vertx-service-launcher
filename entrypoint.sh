@@ -55,8 +55,10 @@ fi
 
 LOG_PROPS="-Djava.util.logging.config.file=/srv/springboard/conf/logging.properties"
 
+final_vertx_conf_path="${VERTX_CONF_PATH:-/opt/conf/entcore.json}"
+
 if [ "$MODE" = "cluster" ]; then
-    exec java $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf /srv/springboard/conf/vertx.conf -cluster
+    exec java $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster
 else
-    exec java $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf /srv/springboard/conf/vertx.conf
+    exec java $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path
 fi
