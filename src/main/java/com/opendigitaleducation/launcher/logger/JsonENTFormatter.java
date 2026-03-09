@@ -7,6 +7,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Instant;
 import java.util.logging.Formatter;
+import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
 public class JsonENTFormatter extends Formatter {
@@ -16,7 +17,7 @@ public class JsonENTFormatter extends Formatter {
     JsonObject logEntry = new JsonObject()
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
       .put("level", record.getLevel().toString())
-      .put("logger", record.getLoggerName())
+      .put("logger", getLogLevel(record.getLevel()))
       .put("traceId", LocalContextProvider.getTraceId())
       .put("message", record.getMessage())
       .put("mttr", LocalContextProvider.getMTTR());
@@ -35,4 +36,9 @@ public class JsonENTFormatter extends Formatter {
 
     return logEntry.encode() + System.lineSeparator();
   }
+
+    private String getLogLevel(final Level level) {
+      final String levelName = level.getName();
+      return "SEVERE".equals(levelName) ? "ERROR" : levelName;
+    }
 }
