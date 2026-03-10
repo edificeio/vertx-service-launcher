@@ -16,8 +16,8 @@ public class JsonENTFormatter extends Formatter {
   public String format(LogRecord record) {
     JsonObject logEntry = new JsonObject()
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
-      .put("level", record.getLevel().toString())
-      .put("logger", getLogLevel(record.getLevel()))
+      .put("level", getLogLevel(record.getLevel()))
+      .put("logger", record.getLoggerName())
       .put("traceId", LocalContextProvider.getTraceId())
       .put("message", record.getMessage())
       .put("mttr", LocalContextProvider.getMTTR());
