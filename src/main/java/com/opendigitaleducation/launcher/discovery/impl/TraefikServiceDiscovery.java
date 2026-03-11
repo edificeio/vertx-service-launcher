@@ -3,8 +3,12 @@ package com.opendigitaleducation.launcher.discovery.impl;
 import static java.lang.String.format;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.state.ConnectionState;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
 
@@ -17,14 +21,40 @@ import io.vertx.core.json.JsonObject;
 
 public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
 
+    private final List<ServiceInfo> registeredServices = Collections.synchronizedList(new ArrayList<>());
+    private volatile boolean sessionLost = false;
+
     public TraefikServiceDiscovery(Vertx vertx) {
         super(vertx);
+        zookeeperClusterManager.getCuratorFramework().getConnectionStateListenable().addListener(
+            (client, newState) -> {
+                if (newState == ConnectionState.LOST) {
+                    log.warn("Zookeeper session lost, ephemeral Traefik nodes will be recreated on reconnection");
+                    sessionLost = true;
+                } else if (newState == ConnectionState.RECONNECTED && sessionLost) {
+                    log.info("Zookeeper reconnected after session loss, recreating ephemeral Traefik nodes");
+                    sessionLost = false;
+                    for (final ServiceInfo serviceInfo : new ArrayList<>(registeredServices)) {
+                        traefikServiceRegistration(serviceInfo)
+                            .onSuccess(v -> log.info("Ephemeral Traefik nodes recreated for: " + serviceInfo.getName()))
+                            .onFailure(e -> log.error("Failed to recreate ephemeral Traefik nodes for: " + serviceInfo.getName(), e));
+                    }
+                }
+            }
+        );
     }
 
     @Override
     public Future<ServiceInfo> serviceRegistration(String name, JsonObject config) {
-        return super.serviceRegistration(name, config).compose(infos ->
-                infos.isHttpService() ? traefikServiceRegistration(infos) : Future.succeededFuture(infos));
+        return super.serviceRegistration(name, config).compose(infos -> {
+            if (infos.isHttpService()) {
+                registeredServices.removeIf(s -> s.getName().equals(infos.getName()));
+                registeredServices.add(infos);
+                return traefikServiceRegistration(infos);
+            } else {
+                return Future.succeededFuture(infos);
+            }
+        });
     }
 
     private Future<ServiceInfo> traefikServiceRegistration(ServiceInfo serviceInfo) {
