@@ -320,22 +320,20 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                                final String servicePath) {
         final String[] lNameVersion = moduleName.split("~");
 
-        if (lNameVersion.length == 3) {
+        if (lNameVersion.length >= 2) {
             final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
-            final String version = lNameVersion[2];
-            versionMap.put(moduleKey, version)
-                .onFailure(ex -> log.error("Error when put module version", ex));
-            versionLocalMap.put(moduleKey, version);
             deploymentsIdMap.put(moduleName, deploymentId);
-            // use module name in case of multiple mods with different
-                                                           // versions
+            // use module name in case of multiple mods with different versions
             // Construct the detailedVersion map by parsing the manifest file of the module and
             // extracting only the desired pieces of information
             // If there is no manifest, only the version of the module has specified in entcore.json
             // will be available.
             vertx.fileSystem().readFile(servicePath + "/META-INF" + File.separator + "MANIFEST.MF", ar -> {
+                String version = "n/a";
+                if(lNameVersion.length >= 3) {
+                    version = lNameVersion[2];
+                }
                 final JsonObject detailedVersion = new JsonObject();
-                detailedVersion.put("version", version);
                 if (ar.succeeded()) {
                     Scanner s = new Scanner(ar.result().toString());
                     while (s.hasNextLine()) {
@@ -346,9 +344,16 @@ public class ModuleDeployerDefault implements ModuleDeployer {
                             if(manifestKeysForVersion.containsKey(key)) {
                                 detailedVersion.put(manifestKeysForVersion.get(key), items[1].trim());
                             }
+                            if("Implementation-Version".equalsIgnoreCase(key)) {
+                                version = items[1];
+                            }
                         }
                     }
                 }
+                detailedVersion.put("version", version);
+                versionMap.put(moduleKey, version)
+                    .onFailure(ex -> log.error("Error when put module version", ex));
+                versionLocalMap.put(moduleKey, version);
                 detailedVersionMap.put(moduleKey, detailedVersion)
                     .onFailure(ex -> log.error("Error when put module detailed version", ex));
                 detailedVersionLocalMap.put(moduleKey, detailedVersion);
@@ -358,7 +363,7 @@ public class ModuleDeployerDefault implements ModuleDeployer {
 
     private void removeAppVersion(final String moduleName) {
         final String[] lNameVersion = moduleName.split("~");
-        if (lNameVersion.length == 3) {
+        if (lNameVersion.length >= 2) {
             final String moduleKey = lNameVersion[0] + "." + lNameVersion[1];
             versionMap.remove(moduleKey).onFailure(ex -> log.error("Error when remove module version", ex));
             versionLocalMap.remove(moduleKey);
