@@ -40,6 +40,7 @@ com.opendigitaleducation.launcher.logger.ENTLogHandler.level=${LOG_LEVEL}
 org.vertx.level=${VERTX_LOG_LEVEL}
 com.hazelcast.level=${HAZELCAST_LOG_LEVEL}
 io.netty.util.internal.PlatformDependent.level=${NETTY_LOG_LEVEL}
+org.apache.zookeeper.level=${LOG_LEVEL}
 
 ACCESS.level=${ACCESS_LOG_LEVEL}
 ACCESS.handlers=com.opendigitaleducation.launcher.logger.AccessLogHandler
@@ -58,7 +59,7 @@ LOG_PROPS="-Djava.util.logging.config.file=/srv/springboard/conf/logging.propert
 final_vertx_conf_path="${VERTX_CONF_PATH:-/opt/conf/entcore.json}"
 
 if [ "$MODE" = "cluster" ]; then
-    exec java $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster
+    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster $VERTX_EXTRA_PARAMS
 else
-    exec java $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path
+    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path $VERTX_EXTRA_PARAMS
 fi
