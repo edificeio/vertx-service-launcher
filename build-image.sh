@@ -14,4 +14,13 @@ else
     LATEST_TAG=""
 fi
 
-docker buildx build --push -t "$TAG" $LATEST_TAG . -f Dockerfile --build-arg JAR_FILE="$JAR_FILE" --platform $ARCHITECTURE
+action="--push"
+if [ "$1" == "local" ]; then
+    action="--load"
+fi
+
+docker buildx build $action -t "$TAG" $LATEST_TAG . -f Dockerfile --build-arg JAR_FILE="$JAR_FILE" --platform $ARCHITECTURE
+
+if [ "$action" == "--push" ]; then
+    docker image ls | grep "launcher" | tr -s ' ' | cut -d' ' -f1  | xargs -r docker rmi -f
+fi
