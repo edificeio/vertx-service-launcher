@@ -20,6 +20,7 @@ public class JsonENTFormatter extends Formatter {
       .put("logger", record.getLoggerName())
       .put("traceId", LocalContextProvider.getTraceId())
       .put("message", record.getMessage())
+      .put("engine", "vertx")
       .put("mttr", LocalContextProvider.getMTTR());
 
     if (record.getThrown() != null) {

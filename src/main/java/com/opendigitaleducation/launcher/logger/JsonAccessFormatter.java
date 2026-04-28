@@ -15,7 +15,8 @@ public class JsonAccessFormatter extends Formatter {
     JsonObject logEntry = new JsonObject()
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
       .put("level", record.getLevel())
-      .put("logger", record.getLoggerName());
+      .put("logger", record.getLoggerName())
+      .put("engine", "vertx");
     final String message = record.getMessage();
     try {
       JsonObject messageJson = new JsonObject(message);
