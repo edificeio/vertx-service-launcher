@@ -19,7 +19,25 @@ if [ "$1" == "local" ]; then
     action="--load"
 fi
 
-docker buildx build $action -t "$TAG" $LATEST_TAG . -f Dockerfile --build-arg JAR_FILE="$JAR_FILE" --platform $ARCHITECTURE
+docker buildx build $action -t "$TAG" $LATEST_TAG . -f Dockerfile --build-arg JAVA_FLAVOUR="jre" --build-arg JAR_FILE="$JAR_FILE" --platform $ARCHITECTURE
+
+if [ "$action" == "--push" ]; then
+    docker image ls | grep "launcher" | tr -s ' ' | cut -d' ' -f1  | xargs -r docker rmi -f
+fi
+
+
+# Build jdk version
+exit 0
+TAG="opendigitaleducation/vertx-service-launcher:$VERSION-jdk"
+
+if [ "$BRANCH_NAME" = "master" ]; then
+    LATEST_TAG="-t opendigitaleducation/vertx-service-launcher:latest-jdk"
+else
+    LATEST_TAG=""
+fi
+
+
+docker buildx build $action -t "$TAG" $LATEST_TAG . -f Dockerfile --build-arg JAVA_FLAVOUR="jdk" --build-arg JAR_FILE="$JAR_FILE" --platform $ARCHITECTURE
 
 if [ "$action" == "--push" ]; then
     docker image ls | grep "launcher" | tr -s ' ' | cut -d' ' -f1  | xargs -r docker rmi -f

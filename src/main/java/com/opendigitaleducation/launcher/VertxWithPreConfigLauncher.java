@@ -4,6 +4,7 @@ import io.vertx.core.Launcher;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.micrometer.MicrometerMetricsOptions;
+import io.vertx.micrometer.VertxJmxMetricsOptions;
 import io.vertx.micrometer.impl.VertxMetricsFactoryImpl;
 
 import java.util.logging.Logger;
@@ -40,6 +41,7 @@ public class VertxWithPreConfigLauncher extends Launcher {
             if(metricsOptionsObj.getFactory() == null) {
                 metricsOptionsObj.setFactory(new VertxMetricsFactoryImpl());
             }
+            metricsOptionsObj.setJmxMetricsOptions(new VertxJmxMetricsOptions().setEnabled(true));
             options.setMetricsOptions(metricsOptionsObj);
         }
         logger.fine("maxWorkerPoolSize is " + options.getWorkerPoolSize());
