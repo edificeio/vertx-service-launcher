@@ -28,6 +28,11 @@ pipeline {
         '''
       }
     }
+    stage('Image') {
+      steps {
+        sh './build-image.sh'
+      }
+    }
   }
 }
 
