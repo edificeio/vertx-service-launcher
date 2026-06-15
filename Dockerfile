@@ -18,7 +18,7 @@ RUN ln -s /opt/${JAR_FILE} /opt/vertx-service-launcher.jar && groupadd vertx && 
 RUN apt-get update && apt-get install -y --no-install-recommends shared-mime-info && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER vertx
-
+RUN mkdir -p /home/vertx/aaf
 WORKDIR /srv/springboard
 # EXPOSE 8090
 
