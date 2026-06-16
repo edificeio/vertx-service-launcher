@@ -12,7 +12,7 @@
 
     <groupId>com.opendigitaleducation</groupId>
     <artifactId>vertx-service-launcher</artifactId>
-    <version>3.3-SNAPSHOT</version>
+    <version>3.1.0</version>
 
     <repositories>
         <repository>
