@@ -112,7 +112,8 @@ public class TraefikServiceDiscovery extends DefaultServiceDiscovery {
                     instanceUrl);
 
             // Userbook hack
-            if ("org.entcore.directory".equals(serviceInfo.getName())) {
+            final String name = serviceInfo.getName();
+            if ("org.entcore.directory".equals(name) || "org.entcore~directory".equals(name)) {
                 traefikServiceRegistration(new ServiceInfo(
                     "org.entcore~userbook~version",
                     serviceInfo.getRouter().replaceAll("directory", "userbook"),
