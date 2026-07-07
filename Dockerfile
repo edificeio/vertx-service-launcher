@@ -1,5 +1,5 @@
 ARG JAVA_FLAVOUR
-FROM maven:3.9.3-eclipse-temurin-8-focal AS builder
+FROM maven:3.9.16-eclipse-temurin-21 AS builder
 WORKDIR /opt/vertx-service-launcher
 COPY pom.xml .
 RUN mvn -B dependency:go-offline
@@ -7,7 +7,7 @@ COPY ./migration ./migration
 COPY ./src ./src
 RUN mvn clean install -Dmaven.test.skip=true -DskipMavenDockerBuild
 
-FROM eclipse-temurin:8-${JAVA_FLAVOUR}-focal
+FROM eclipse-temurin:21.0.11_10-${JAVA_FLAVOUR}-jammy
 LABEL maintainer="Damien BOISSIN <damien.boissin@edifice.io>"
 
 ARG JAR_FILE

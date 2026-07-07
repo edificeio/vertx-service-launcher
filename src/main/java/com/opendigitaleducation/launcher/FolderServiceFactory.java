@@ -15,7 +15,6 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Collections;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
 
@@ -105,8 +104,6 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                         if (item.length == 3) {
                             id = item[2];
 
-                            deploymentOptions.setExtraClasspath(Collections.singletonList(servicePath));
-                            deploymentOptions.setIsolationGroup("__vertx_folder_" + identifier.split("~")[1]);
                             try {
                                 URLClassLoader urlClassLoader = new URLClassLoader(
                                     new URL[]{new URL("file://" + servicePath )}, classLoader);
