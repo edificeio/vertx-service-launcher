@@ -51,7 +51,7 @@ EOF
 
 REMOTE_DEBUG=""
 if [ "$ENABLE_REMOTE_DEBUG" = "true" ]; then
-    REMOTE_DEBUG="-agentlib:jdwp=transport=dt_socket,address=5000,server=y,suspend=${DEBUG_SUSPEND:-n}"
+    REMOTE_DEBUG="-agentlib:jdwp=transport=dt_socket,address=*:5000,server=y,suspend=${DEBUG_SUSPEND:-n}"
 fi
 
 LOG_PROPS="-Djava.util.logging.config.file=/srv/springboard/conf/logging.properties"
@@ -59,7 +59,7 @@ LOG_PROPS="-Djava.util.logging.config.file=/srv/springboard/conf/logging.propert
 final_vertx_conf_path="${VERTX_CONF_PATH:-/opt/conf/entcore.json}"
 
 if [ "$MODE" = "cluster" ]; then
-    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster $VERTX_EXTRA_PARAMS
+    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster $VERTX_EXTRA_PARAMS
 else
-    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path $VERTX_EXTRA_PARAMS
+    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path $VERTX_EXTRA_PARAMS
 fi

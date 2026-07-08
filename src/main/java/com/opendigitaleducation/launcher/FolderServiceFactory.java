@@ -15,6 +15,7 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Collections;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
 
@@ -93,40 +94,62 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
         }).onFailure(th -> resolution.fail(th.getMessage()));
     }
     private void deploy(String identifier, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution, String servicePath) {
+        // TODO : understand the magic behind that
         vertx.fileSystem().readFile(servicePath + "META-INF" + File.separator + "MANIFEST.MF", ar -> {
-			if (ar.succeeded()) {
+            if (ar.succeeded()) {
                 Scanner s = new Scanner(ar.result().toString());
-                String id = null;
+                String serviceDescriptorName = null;
                 while (s.hasNextLine()) {
                     final String line = s.nextLine();
                     if (line.contains("Main-Verticle:")) {
-                        String [] item = line.split(":");
+                        String[] item = line.split(":");
                         if (item.length == 3) {
-                            id = item[2];
-
-                            try {
-                                URLClassLoader urlClassLoader = new URLClassLoader(
-                                    new URL[]{new URL("file://" + servicePath )}, classLoader);
-                                FolderServiceFactory.super.createVerticle(id, deploymentOptions, urlClassLoader, resolution);
-                                // resolution.future().onSuccess(cv -> cv.call().getVertx().getOrCreateContext().config());
-                            } catch (MalformedURLException e) {
-                                logger.error("Error while trying to deploy " + identifier, e);
-                                resolution.fail(e);
-                            }
+                            serviceDescriptorName = item[2].trim();
                         } else {
                             resolution.fail("Invalid service identifier : " + line);
+                            s.close();
+                            return;
                         }
                         break;
                     }
                 }
                 s.close();
-                if (id == null && !resolution.future().isComplete()) {
-                    resolution.fail("Service not found (MANIFEST): " + identifier);
+                if (serviceDescriptorName == null) {
+                    if (!resolution.future().isComplete()) {
+                        resolution.fail("Service not found (MANIFEST): " + identifier);
+                    }
+                    return;
                 }
+                // Replicate ServiceVerticleFactory behavior: read <name>.json descriptor to get actual class
+                final String descriptorPath = servicePath + serviceDescriptorName + ".json";
+                vertx.fileSystem().readFile(descriptorPath, descAr -> {
+                    if (descAr.succeeded()) {
+                        try {
+                            JsonObject descriptor = new JsonObject(descAr.result().toString());
+                            final String verticleClassName = descriptor.getString("main");
+                            if (verticleClassName == null || verticleClassName.isBlank()) {
+                                resolution.fail("No 'main' field in service descriptor: " + descriptorPath);
+                                return;
+                            }
+                            URLClassLoader urlClassLoader = new URLClassLoader(
+                                new URL[]{new URL("file://" + servicePath)}, classLoader);
+                            resolution.complete(() -> {
+                                Thread.currentThread().setContextClassLoader(urlClassLoader);
+                                Class<?> clazz = urlClassLoader.loadClass(verticleClassName.trim());
+                                return (Verticle) clazz.getDeclaredConstructor().newInstance();
+                            });
+                        } catch (Exception e) {
+                            logger.error("Error while trying to deploy " + identifier, e);
+                            resolution.fail(e);
+                        }
+                    } else {
+                        resolution.fail("Service descriptor not found: " + descriptorPath + " for " + identifier);
+                    }
+                });
             } else {
                 resolution.fail(ar.cause());
             }
-		});
+        });
     }
 
     @Override
