@@ -56,10 +56,15 @@ fi
 
 LOG_PROPS="-Djava.util.logging.config.file=/srv/springboard/conf/logging.properties"
 
+# BouncyCastle security provider (registered in java.security). Appended to the
+# boot classpath as its original signed jar so the provider authenticates; -cp
+# cannot be used because the launcher starts with -jar.
+BCPROV="-Xbootclasspath/a:/opt/libs/bcprov-jdk18on-1.80.jar"
+
 final_vertx_conf_path="${VERTX_CONF_PATH:-/opt/conf/entcore.json}"
 
 if [ "$MODE" = "cluster" ]; then
-    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster $VERTX_EXTRA_PARAMS
+    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS $BCPROV -XX:+UnlockExperimentalVMOptions -Dvertx.zookeeper.config=/srv/springboard/conf/zookeeper.json -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path -cluster $VERTX_EXTRA_PARAMS
 else
-    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS -XX:+UnlockExperimentalVMOptions -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path $VERTX_EXTRA_PARAMS
+    exec java $JAVA_TOOL_OPTIONS $REMOTE_DEBUG $LOG_PROPS $BCPROV -XX:+UnlockExperimentalVMOptions -jar /opt/vertx-service-launcher.jar -Dvertx.services.path=/srv/springboard/mods -Dvertx.disableFileCaching=true -conf $final_vertx_conf_path $VERTX_EXTRA_PARAMS
 fi
