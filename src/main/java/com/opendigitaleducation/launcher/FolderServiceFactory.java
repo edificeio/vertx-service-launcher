@@ -12,10 +12,10 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.service.ServiceVerticleFactory;
 
 import java.io.File;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Collections;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
 
@@ -93,6 +93,7 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
             });
         }).onFailure(th -> resolution.fail(th.getMessage()));
     }
+
     private void deploy(String identifier, DeploymentOptions deploymentOptions, ClassLoader classLoader, Promise<Callable<Verticle>> resolution, String servicePath) {
         vertx.fileSystem().readFile(servicePath + "META-INF" + File.separator + "MANIFEST.MF", ar -> {
 			if (ar.succeeded()) {
@@ -103,15 +104,16 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                     if (line.contains("Main-Verticle:")) {
                         String [] item = line.split(":");
                         if (item.length == 3) {
-                            id = item[2];
-
-                            deploymentOptions.setExtraClasspath(Collections.singletonList(servicePath));
-                            deploymentOptions.setIsolationGroup("__vertx_folder_" + identifier.split("~")[1]);
+                            id = item[2].trim();
                             try {
+                                // Per-module isolation is provided by this URLClassLoader (parent-first
+                                // delegation to the minimal launcher classloader, so each module loads its
+                                // own copy of the module classes). setIsolationGroup/setExtraClasspath are
+                                // deliberately not used: they rely on the system classloader being a
+                                // URLClassLoader, which is no longer the case on Java 9+.
                                 URLClassLoader urlClassLoader = new URLClassLoader(
                                     new URL[]{new URL("file://" + servicePath )}, classLoader);
-                                FolderServiceFactory.super.createVerticle(id, deploymentOptions, urlClassLoader, resolution);
-                                // resolution.future().onSuccess(cv -> cv.call().getVertx().getOrCreateContext().config());
+                                deployFromDescriptor(id, deploymentOptions, urlClassLoader, resolution);
                             } catch (MalformedURLException e) {
                                 logger.error("Error while trying to deploy " + identifier, e);
                                 resolution.fail(e);
@@ -130,6 +132,55 @@ public class FolderServiceFactory extends ServiceVerticleFactory {
                 resolution.fail(ar.cause());
             }
 		});
+    }
+
+    /**
+     * Reads the {@code <serviceId>.json} service descriptor from the module classloader and completes the
+     * resolution with a verticle that deploys the module's {@code main} verticle with {@code classLoader}
+     * set explicitly on the deployment options. Passing the classloader through the deployment options makes
+     * Vert.x bypass its (Java 8 only) isolation-group machinery entirely, so the module loads from its own
+     * URLClassLoader on any JDK. This mirrors {@link ServiceVerticleFactory} except that the classloader is
+     * preserved (the parent implementation drops it when rebuilding the options from JSON).
+     */
+    private void deployFromDescriptor(String serviceId, DeploymentOptions deploymentOptions, URLClassLoader classLoader, Promise<Callable<Verticle>> resolution) {
+        final String descriptorFile = serviceId + ".json";
+        final JsonObject descriptor;
+        try (InputStream is = classLoader.getResourceAsStream(descriptorFile)) {
+            if (is == null) {
+                resolution.fail("Cannot find service descriptor file " + descriptorFile + " on classpath");
+                return;
+            }
+            try (Scanner scanner = new Scanner(is, "UTF-8").useDelimiter("\\A")) {
+                descriptor = new JsonObject(scanner.next());
+            }
+        } catch (Exception e) {
+            resolution.fail(e);
+            return;
+        }
+        final String main = descriptor.getString("main");
+        if (main == null) {
+            resolution.fail(descriptorFile + " does not contain a main field");
+            return;
+        }
+        final JsonObject mergedOptions = deploymentOptions.toJson()
+            .mergeIn(descriptor.getJsonObject("options", new JsonObject()));
+        resolution.complete(() -> new AbstractVerticle() {
+            @Override
+            public void start(Promise<Void> startPromise) {
+                final DeploymentOptions moduleOptions = new DeploymentOptions(mergedOptions).setClassLoader(classLoader);
+                if (moduleOptions.getConfig() == null) {
+                    moduleOptions.setConfig(new JsonObject());
+                }
+                moduleOptions.getConfig().mergeIn(context.config());
+                vertx.deployVerticle(main, moduleOptions, res -> {
+                    if (res.succeeded()) {
+                        startPromise.complete();
+                    } else {
+                        startPromise.fail(res.cause());
+                    }
+                });
+            }
+        });
     }
 
     @Override
