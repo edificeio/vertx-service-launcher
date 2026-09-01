@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
 
+import static com.opendigitaleducation.launcher.utils.LogUtil.HOSTNAME;
+
 public class JsonAccessFormatter extends Formatter {
 
   @Override
@@ -16,7 +18,8 @@ public class JsonAccessFormatter extends Formatter {
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
       .put("level", record.getLevel())
       .put("logger", record.getLoggerName())
-      .put("engine", "vertx");
+      .put("engine", "vertx")
+      .put("hostname", HOSTNAME);
     final String message = record.getMessage();
     try {
       JsonObject messageJson = new JsonObject(message);
