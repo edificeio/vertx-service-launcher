@@ -10,9 +10,11 @@ import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
+import static com.opendigitaleducation.launcher.utils.LogUtil.HOSTNAME;
+
 public class JsonENTFormatter extends Formatter {
 
-  @Override
+    @Override
   public String format(LogRecord record) {
     JsonObject logEntry = new JsonObject()
       .put("timestamp", Instant.ofEpochMilli(record.getMillis()).toString())
@@ -21,7 +23,8 @@ public class JsonENTFormatter extends Formatter {
       .put("traceId", LocalContextProvider.getTraceId())
       .put("message", record.getMessage())
       .put("engine", "vertx")
-      .put("mttr", LocalContextProvider.getMTTR());
+      .put("mttr", LocalContextProvider.getMTTR())
+      .put("hostname", HOSTNAME);
 
     if (record.getThrown() != null) {
         try {
