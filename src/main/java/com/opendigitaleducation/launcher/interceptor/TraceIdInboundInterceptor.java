@@ -19,7 +19,7 @@ public class TraceIdInboundInterceptor<T> implements Handler<DeliveryContext<T>>
 
     private static final Logger logger = LoggerFactory.getLogger(TraceIdInboundInterceptor.class);
     public static final String TRACE_TIME = "X-Cloud-Trace-Time";
-    public static final String TRACE_ID   = "X-Cloud-Trace-Context";
+    public static final String TRACE_ID   = System.getenv().getOrDefault("TRACE_ID_HEADER_NAME", "x-request-id");
     public static final String TRACE_ADDRESS   = "X-Cloud-Trace-Address";
 
     @Override
